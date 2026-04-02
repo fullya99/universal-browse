@@ -101,7 +101,7 @@ async function run() {
         "  viewport <w>x<h>",
         "  screenshot [path]",
         "  cookies",
-        "  cookie-import <json-file>",
+        "  cookie-import <json-file> [--allow-plaintext-cookies]",
         "  cookie-import-browser [browser] [--domain d] [--profile p]",
         "  console",
         "  network",

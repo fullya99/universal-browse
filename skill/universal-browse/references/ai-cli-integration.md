@@ -6,7 +6,7 @@ This document gives a single integration contract so `universal-browse` can be p
 
 Integration strategy below is based on public docs/repositories:
 
-- Claude Code docs: project memory via `CLAUDE.md`, plus skills/plugins ecosystem.
+- Claude Code docs: project memory via `CLAUDE.md`, plus native skills ecosystem.
 - Codex docs: explicit `AGENTS.md` guide in Codex docs.
 - OpenCode docs: `/init` creates `AGENTS.md` in project root.
 - Gemini CLI repo/docs: explicit project context file `GEMINI.md`.
@@ -19,9 +19,12 @@ Every tool-specific setup should enforce these rules:
 - Use `npm run unibrowse -- <command>` as the default runtime command.
 - Run `npm run preflight` before debugging runtime failures.
 - Never print or store raw daemon bearer tokens.
+- Never print or store raw cookie values in reports/logs.
 - Keep daemon local-only (`127.0.0.1`).
 - Do not commit/push automatically during setup.
 - Do not report success unless native registration/proof is complete for the host tool.
+
+This contract is cross-CLI/cross-AI: Claude Code, Codex CLI, OpenCode, Gemini CLI, Kimi Code CLI, and IDE agents must use the same runtime and security guardrails.
 
 ## 2) Success criteria (must pass both)
 
@@ -48,8 +51,7 @@ Objectives:
 Before setup, ask the user these choices and wait for answers:
 1) Target tool: Claude Code / Codex CLI / OpenCode / Gemini CLI / Kimi Code CLI / other
 2) Install scope: project-native / personal-native / runtime-only fallback
-3) If Claude Code: native standalone install (`npm run install:claude:project|personal`) or plugin mode (`claude plugin validate .`, then plugin install only if marketplace is configured)
-4) If native registration fails: stop with NOT READY or continue as READY-RUNTIME-ONLY
+3) If native registration fails: stop with NOT READY or continue as READY-RUNTIME-ONLY
 
 Rules:
 - no commit/push
@@ -70,7 +72,7 @@ Execution plan:
 
 Apply these defaults unless the user chooses otherwise:
 
-- Claude Code: prefer standalone native skill install first (`.claude/skills/...`) for deterministic setup, then optional plugin validation/install.
+- Claude Code: prefer standalone native skill install first (`.claude/skills/...`) for deterministic setup.
 - Codex CLI: prefer project `AGENTS.md`; use `~/.codex/AGENTS.md` only if user asks global scope.
 - OpenCode: prefer project `AGENTS.md` via `/init`.
 - Gemini CLI: prefer project `GEMINI.md`.
@@ -85,8 +87,6 @@ Use the first exact match. Do not downgrade to generic files if a native locatio
 - Claude Code
   - native skill location: `.claude/skills/universal-browse/SKILL.md` (project) or `~/.claude/skills/universal-browse/SKILL.md` (personal)
   - native standalone installer: `npm run install:claude:project` or `npm run install:claude:personal`
-  - plugin dev proof path: `claude plugin validate .` then `claude --plugin-dir .`
-  - plugin persistent install path (marketplace): `claude plugin install <plugin>@<marketplace>`
   - proof command: ask Claude for available skills and verify `/universal-browse` exists
 - Codex CLI
   - native instructions: `AGENTS.md` (or `AGENTS.override.md`) per Codex discovery
@@ -205,14 +205,7 @@ npm run install:claude:project
 npm run install:claude:personal
 ```
 
-- Plugin workflow (optional):
-
-```bash
-claude plugin validate .
-claude --plugin-dir .
-# persistent install requires marketplace registration:
-# claude plugin install universal-browse@<marketplace>
-```
+- Plugin workflow is not supported for installation in this repository. Use standalone native installers only.
 
 ### Codex CLI
 
@@ -251,8 +244,7 @@ claude --plugin-dir .
 
 - `npx unibrowse` not found: use `npm run unibrowse -- <command>`.
 - runtime PASS but native not installed: mark `READY-RUNTIME-ONLY`, not full success.
-- `claude plugin add` unknown command: use `claude plugin validate .` + `claude --plugin-dir .` for local plugin dev, or `claude plugin install <plugin>@<marketplace>` for persistent installs.
-- `No manifest found` during plugin validation: add `.claude-plugin/plugin.json` at repo root.
+- Claude skill not detected after install: rerun `npm run install:claude:project` or `npm run install:claude:personal`, then verify `.claude/skills/universal-browse/SKILL.md` exists in the selected scope.
 - Linux headed without display: install Xvfb or use headless mode.
 - macOS cookie decrypt blocked: keychain approval required.
 - Windows cookie decrypt blocked: run under the same user profile and ensure PowerShell is available.

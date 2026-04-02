@@ -133,10 +133,11 @@ Output format:
 
 - For local repo usage, prefer `npm run unibrowse -- <command>`.
 - `npx unibrowse` also works after install in most environments, but `npm run` is the most deterministic path for agent workflows.
+- Keep the same guardrails across all AI CLIs: no token leakage, no raw cookie leakage, no auto-commit/push during setup.
 
 ### Where to plug instructions by tool
 
-- Claude Code: native skill in `.claude/skills/universal-browse/SKILL.md` (recommended) or plugin workflow (`claude plugin validate .` + optional marketplace install); `CLAUDE.md` is supporting memory
+- Claude Code: standalone native skill in `.claude/skills/universal-browse/SKILL.md` via installer scripts; `CLAUDE.md` is supporting memory
 - Codex CLI: `AGENTS.md` / `AGENTS.override.md` (native discovery)
 - OpenCode: `AGENTS.md` (native, via `/init`)
 - Cursor/Windsurf/other IDE agents: workspace rules/instructions file
@@ -160,19 +161,15 @@ npm run install:claude:personal
 
 This path is deterministic and does not require marketplace setup.
 
-### Claude Code plugin workflow (optional)
+### Claude Code install policy
 
-For plugin development in this repository:
-
-```bash
-claude plugin validate .
-claude --plugin-dir .
-```
-
-For persistent plugin installs, use a configured marketplace:
+Plugin-based install is no longer part of the supported integration path for this repository.
+Use standalone native skill install only:
 
 ```bash
-claude plugin install universal-browse@<marketplace>
+npm run install:claude:project
+# or
+npm run install:claude:personal
 ```
 
 ## How it works
@@ -249,6 +246,9 @@ The browser importer reads Chromium profile cookie DBs and converts them into Pl
 - Command endpoint requires bearer token
 - Cookie picker data/action routes are token-protected
 - Path checks on local JSON cookie import
+- `cookies` command output masks cookie values by default
+- Treat JSON cookie exports as secrets (delete after use)
+- Optional strict mode: set `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` to require `--allow-plaintext-cookies` on `cookie-import`
 - No remote control channel exposed by default
 
 ## Command reference
@@ -268,6 +268,7 @@ console
 network
 cookies
 cookie-import <json-file>
+cookie-import <json-file> --allow-plaintext-cookies
 cookie-import-browser [browser] [--domain d] [--profile p]
 ```
 

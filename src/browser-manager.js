@@ -15,6 +15,32 @@ function truncate(text, max = 12000) {
   return `${text.slice(0, max)}\n... [truncated]`;
 }
 
+const SENSITIVE_COOKIE_NAMES = new Set([
+  "auth_token",
+  "ct0",
+  "sid",
+  "sessionid",
+  "token",
+  "access_token",
+  "refresh_token",
+]);
+
+function redactCookieValue(name, value) {
+  const raw = typeof value === "string" ? value : String(value ?? "");
+  if (raw.length === 0) return "";
+  if (SENSITIVE_COOKIE_NAMES.has(String(name || "").toLowerCase())) return "[REDACTED]";
+  if (raw.length <= 8) return `${raw[0]}***${raw[raw.length - 1]}`;
+  return `${raw.slice(0, 2)}***${raw.slice(-2)}`;
+}
+
+function redactCookies(cookies) {
+  if (!Array.isArray(cookies)) return [];
+  return cookies.map((cookie) => ({
+    ...cookie,
+    value: redactCookieValue(cookie?.name, cookie?.value),
+  }));
+}
+
 function isPathWithin(baseDir, targetPath) {
   const base = path.resolve(baseDir);
   const target = path.resolve(targetPath);
@@ -179,15 +205,24 @@ export class BrowserManager {
         return `OK: screenshot ${outPath}`;
       }
       case "cookies":
-        return await this.page.context().cookies();
+        return redactCookies(await this.page.context().cookies());
       case "cookie-import": {
-        const filePath = args[0];
+        const allowPlaintext = args.includes("--allow-plaintext-cookies");
+        const positionalArgs = args.filter((arg) => arg !== "--allow-plaintext-cookies");
+        const filePath = positionalArgs[0];
         if (!filePath) throw new Error("Usage: cookie-import <json-file>");
         const resolved = path.resolve(filePath);
         const safeDirs = [os.tmpdir(), process.cwd()];
         const isSafe = safeDirs.some((dir) => isPathWithin(dir, resolved));
         if (!isSafe) throw new Error(`Path must be within: ${safeDirs.join(", ")}`);
         if (!fs.existsSync(resolved)) throw new Error(`File not found: ${resolved}`);
+
+        if (process.env.UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK === "1" && !allowPlaintext) {
+          throw new Error(
+            "Plaintext cookie import requires explicit acknowledgement. Re-run with --allow-plaintext-cookies",
+          );
+        }
+
         const raw = fs.readFileSync(resolved, "utf8");
         let cookies;
         try {
@@ -206,7 +241,7 @@ export class BrowserManager {
           if (!cookie.path) cookie.path = "/";
         }
         await this.page.context().addCookies(cookies);
-        return `OK: loaded ${cookies.length} cookies from ${resolved}`;
+        return `OK: loaded ${cookies.length} cookies from ${resolved}\nWARNING: cookie files may contain live session secrets; delete file after import.`;
       }
       case "cookie-import-browser": {
         const browserArg = args[0] || "chrome";

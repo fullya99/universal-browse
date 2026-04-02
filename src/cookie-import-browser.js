@@ -131,15 +131,58 @@ function validateProfile(profile) {
   }
 }
 
+function getCookieDbCandidates(baseDir, dataDir, profile) {
+  const profileDir = path.join(baseDir, dataDir, profile);
+  return [
+    path.join(profileDir, "Cookies"),
+    path.join(profileDir, "Network", "Cookies"),
+  ];
+}
+
+function getCookieDbCandidatesFromProfileDir(profileDir) {
+  return [
+    path.join(profileDir, "Cookies"),
+    path.join(profileDir, "Network", "Cookies"),
+  ];
+}
+
+function normalizeDomainInput(domain) {
+  const raw = String(domain || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.includes("://")) {
+    try {
+      return new URL(raw).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+  return raw.replace(/\/+$/, "");
+}
+
+function expandDomainCandidates(domains) {
+  const candidates = new Set();
+  for (const input of domains) {
+    const normalized = normalizeDomainInput(input);
+    if (!normalized) continue;
+    candidates.add(normalized);
+    if (normalized.startsWith(".")) candidates.add(normalized.slice(1));
+    else candidates.add(`.${normalized}`);
+  }
+  return [...candidates];
+}
+
 function findBrowserMatch(browser, profile) {
   validateProfile(profile);
   for (const platform of getSearchPlatforms()) {
     const dataDir = getDataDirForPlatform(browser, platform);
     if (!dataDir) continue;
-    const dbPath = path.join(getBaseDir(platform), dataDir, profile, "Cookies");
-    try {
-      if (fs.existsSync(dbPath)) return { browser, platform, dbPath };
-    } catch {}
+    const baseDir = getBaseDir(platform);
+    const candidates = getCookieDbCandidates(baseDir, dataDir, profile);
+    for (const dbPath of candidates) {
+      try {
+        if (fs.existsSync(dbPath)) return { browser, platform, dbPath };
+      } catch {}
+    }
   }
   return null;
 }
@@ -151,8 +194,10 @@ function getBrowserMatch(browser, profile) {
   const attempted = getSearchPlatforms()
     .map((platform) => {
       const dataDir = getDataDirForPlatform(browser, platform);
-      return dataDir ? path.join(getBaseDir(platform), dataDir, profile, "Cookies") : null;
+      if (!dataDir) return null;
+      return getCookieDbCandidates(getBaseDir(platform), dataDir, profile);
     })
+    .flat()
     .filter(Boolean);
 
   throw new CookieImportError(
@@ -168,7 +213,12 @@ async function openDb(dbPath, browserName) {
     return { db, copied: false, tmpPath: null };
   } catch (err) {
     const msg = String(err?.message || err);
-    if (msg.includes("SQLITE_BUSY") || msg.includes("database is locked")) {
+    if (
+      msg.includes("SQLITE_BUSY") ||
+      msg.includes("database is locked") ||
+      msg.includes("unable to open database file") ||
+      msg.toLowerCase().includes("disk i/o error")
+    ) {
       return openDbFromCopy(dbPath, browserName);
     }
     if (msg.includes("SQLITE_CORRUPT") || msg.includes("malformed")) {
@@ -180,25 +230,35 @@ async function openDb(dbPath, browserName) {
 
 async function openDbFromCopy(dbPath, browserName) {
   const Sqlite = await getSqliteModule();
-  const tmpPath = path.join(os.tmpdir(), `universal-browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`);
-  try {
-    fs.copyFileSync(dbPath, tmpPath);
-    const walPath = `${dbPath}-wal`;
-    const shmPath = `${dbPath}-shm`;
-    if (fs.existsSync(walPath)) fs.copyFileSync(walPath, `${tmpPath}-wal`);
-    if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, `${tmpPath}-shm`);
-    const db = new Sqlite(tmpPath, { readonly: true, fileMustExist: true });
-    return { db, copied: true, tmpPath };
-  } catch {
-    try {
-      fs.unlinkSync(tmpPath);
-    } catch {}
-    throw new CookieImportError(
-      `Cookie database is locked (${browserName} may be running). Try closing ${browserName} first.`,
-      "db_locked",
-      "retry",
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const tmpPath = path.join(
+      os.tmpdir(),
+      `universal-browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`,
     );
+    try {
+      fs.copyFileSync(dbPath, tmpPath);
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+      if (fs.existsSync(walPath)) fs.copyFileSync(walPath, `${tmpPath}-wal`);
+      if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, `${tmpPath}-shm`);
+      const db = new Sqlite(tmpPath, { readonly: true, fileMustExist: true });
+      return { db, copied: true, tmpPath };
+    } catch {
+      for (const p of [tmpPath, `${tmpPath}-wal`, `${tmpPath}-shm`]) {
+        try {
+          fs.unlinkSync(p);
+        } catch {}
+      }
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
+      }
+    }
   }
+  throw new CookieImportError(
+    `Cookie database is locked (${browserName} may be running). Try closing ${browserName} first.`,
+    "db_locked",
+    "retry",
+  );
 }
 
 function closeDb(handle) {
@@ -478,8 +538,9 @@ export function findInstalledBrowsers() {
           entries.some(
             (e) =>
               e.isDirectory() &&
-              e.name.startsWith("Profile ") &&
-              fs.existsSync(path.join(browserDir, e.name, "Cookies")),
+              getCookieDbCandidatesFromProfileDir(path.join(browserDir, e.name)).some((candidate) =>
+                fs.existsSync(candidate),
+              ),
           )
         ) {
           return true;
@@ -509,9 +570,11 @@ export function listProfiles(browserName) {
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (entry.name !== "Default" && !entry.name.startsWith("Profile ")) continue;
-      const cookiePath = path.join(browserDir, entry.name, "Cookies");
-      if (!fs.existsSync(cookiePath)) continue;
+      if (entry.name.startsWith(".")) continue;
+      const hasCookieDb = getCookieDbCandidatesFromProfileDir(path.join(browserDir, entry.name)).some((candidate) =>
+        fs.existsSync(candidate),
+      );
+      if (!hasCookieDb) continue;
       if (profiles.some((p) => p.name === entry.name)) continue;
 
       let displayName = entry.name;
@@ -558,6 +621,10 @@ export async function importCookies(browserName, domains, profile = "Default") {
   if (!Array.isArray(domains) || domains.length === 0) {
     return { cookies: [], count: 0, failed: 0, domainCounts: {} };
   }
+  const domainCandidates = expandDomainCandidates(domains);
+  if (domainCandidates.length === 0) {
+    return { cookies: [], count: 0, failed: 0, domainCounts: {} };
+  }
   const browser = resolveBrowser(browserName);
   const match = getBrowserMatch(browser, profile);
   const keys = await getDerivedKeys(match);
@@ -565,7 +632,7 @@ export async function importCookies(browserName, domains, profile = "Default") {
 
   try {
     const now = chromiumNow().toString();
-    const placeholders = domains.map(() => "?").join(",");
+    const placeholders = domainCandidates.map(() => "?").join(",");
     const rows = handle.db
       .prepare(
         `SELECT host_key, name, value, encrypted_value, path, expires_utc,
@@ -575,7 +642,7 @@ export async function importCookies(browserName, domains, profile = "Default") {
            AND (has_expires = 0 OR expires_utc > ?)
          ORDER BY host_key, name`,
       )
-      .all(...domains, now);
+      .all(...domainCandidates, now);
 
     const cookies = [];
     let failed = 0;

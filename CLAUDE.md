@@ -23,8 +23,6 @@ universal-browse/
 │   ├── cookie-import-browser.js  # Import/dechiffrement cookies Chromium
 │   ├── cookie-picker-routes.js   # Endpoints /cookie-picker/*
 │   └── cookie-picker-ui.js       # UI picker
-├── .claude-plugin/
-│   └── plugin.json               # Manifest plugin Claude Code
 ├── skill/universal-browse/
 │   ├── SKILL.md                  # Skill principal
 │   └── references/               # Docs operationnelles
@@ -132,8 +130,6 @@ Mapping natif par outil:
 
 - Claude Code:
   - standalone natif (recommande): `npm run install:claude:project` ou `npm run install:claude:personal`
-  - plugin dev: `claude plugin validate .` puis `claude --plugin-dir .`
-  - plugin persistant: `claude plugin install <plugin>@<marketplace>`
   - emplacement skill natif: `.claude/skills/universal-browse/SKILL.md`
 - Codex CLI: `AGENTS.md` / `AGENTS.override.md`
 - OpenCode: `AGENTS.md` (via `/init`)
