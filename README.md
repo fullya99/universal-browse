@@ -101,7 +101,7 @@ You are in the root of the universal-browse repository.
 Use this helper as the source of truth:
 - skill/universal-browse/references/ai-cli-integration.md
 
-Execute section "2) One prompt to install and validate" exactly, then apply section "4) Acceptance checklist for \"plugged\" status".
+Execute section "2) Universal bootstrap prompt (for any AI CLI)" first, then run section "4) Install and validate runtime", and finish with section "6) Acceptance checklist for plugged status".
 
 Constraints:
 - do not commit or push
@@ -129,8 +129,23 @@ Output format:
 - OpenCode: project instruction file configured for the current workspace
 - Cursor/Windsurf/other IDE agents: workspace rules/instructions file
 - Gemini CLI wrappers: project prompt/instruction file loaded at session start
+- Kimi-based CLIs: native project-memory file if available, otherwise `AI_INSTRUCTIONS.md`
 
 If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md` and paste the integration prompt there.
+
+### Claude Code plugin install (optional but recommended)
+
+If you want `universal-browse` available as a registered Claude Code skill/plugin (not only as runtime commands), install the plugin explicitly:
+
+```bash
+# Local path (development)
+claude plugin add /path/to/universal-browse
+
+# Or directly from GitHub (shareable)
+claude plugin add https://github.com/fullya99/universal-browse
+```
+
+After install, Claude Code can load `skill/universal-browse/SKILL.md` directly via plugin discovery.
 
 ## How it works
 
