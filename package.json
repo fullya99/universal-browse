@@ -11,6 +11,8 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "setup": "node scripts/setup.js",
     "start": "node src/server.js",
     "unibrowse": "node src/cli.js",
     "test": "node --test",

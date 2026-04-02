@@ -36,10 +36,26 @@ const platform = process.platform;
 const release = os.release();
 process.stdout.write(`Platform: ${platform} ${release}\n`);
 
+function isChromiumInstalled() {
+  // Check if Playwright can resolve the Chromium executable path
+  const script = "try { process.stdout.write(require('playwright').chromium.executablePath()) } catch { process.exit(1) }";
+  const r = spawnSync(process.execPath, ["-e", script], {
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 10000,
+  });
+  if (r.status !== 0) return false;
+  const execPath = (r.stdout || "").toString().trim();
+  return execPath.length > 0;
+}
+
 let okAll = true;
 okAll = check("Node >= 20", nodeMajor() >= 20, process.versions.node) && okAll;
 okAll = check("npm available", hasProgram("npm")) && okAll;
-okAll = check("playwright available", hasProgram("npx")) && okAll;
+okAll = check("npx available", hasProgram("npx")) && okAll;
+
+const chromiumOk = isChromiumInstalled();
+okAll = check("Playwright Chromium installed", chromiumOk,
+  chromiumOk ? "" : "run: npx playwright install chromium") && okAll;
 
 if (platform === "linux") {
   checkOptional("xvfb-run available (optional)", hasProgram("xvfb-run"), "needed for headed mode without display");

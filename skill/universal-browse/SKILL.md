@@ -15,22 +15,28 @@ Validate web behavior quickly and repeatedly via a persistent browser daemon.
 
 ## Instructions
 
-### Step 1: Verify runtime readiness
+### Step 1: Setup (one command, all platforms)
 
-Run preflight to check all dependencies are satisfied:
+Run setup to install all dependencies including Playwright Chromium:
+
+```bash
+npm run setup
+```
+
+This single command handles `npm install`, Chromium browser download (with system deps on Linux), and preflight verification. Expected output: all checks PASS.
+
+If setup already completed (or you only want to verify):
 
 ```bash
 npm run preflight
 ```
 
-If Playwright browsers are missing, install them:
+If preflight reports Chromium missing:
 
 ```bash
-npx playwright install --with-deps chromium   # Linux (installs system deps)
 npx playwright install chromium                # macOS / Windows
+npx playwright install --with-deps chromium   # Linux (installs system deps)
 ```
-
-Expected output: all checks PASS.
 
 ### Step 2: Start a session and navigate
 

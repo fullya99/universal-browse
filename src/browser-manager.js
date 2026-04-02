@@ -313,10 +313,20 @@ export class BrowserManager {
     const args = [];
     if (this.strategy.noSandbox) args.push("--no-sandbox");
     if (this.strategy.extraArgs) args.push(...this.strategy.extraArgs);
-    this.browser = await chromium.launch({
-      headless: this.strategy.useHeadless,
-      args,
-    });
+    try {
+      this.browser = await chromium.launch({
+        headless: this.strategy.useHeadless,
+        args,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/executable doesn't exist|browser.*not.*found|chromium.*not.*installed/i.test(msg)) {
+        throw new Error(
+          `Chromium is not installed. Run: npx playwright install chromium\nOriginal error: ${msg}`,
+        );
+      }
+      throw err;
+    }
     this.context = await this.browser.newContext({ viewport: { width: 1280, height: 720 } });
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10000);

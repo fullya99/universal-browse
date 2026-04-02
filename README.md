@@ -16,13 +16,21 @@ One `npm ci` and you get a local Playwright daemon (`unibrowse`) that stays aliv
 ```bash
 git clone https://github.com/fullya99/universal-browse.git
 cd universal-browse
+npm run setup      # installs deps + Playwright Chromium + runs preflight (all platforms)
+```
+
+That's it. One command. `npm run setup` handles `npm install`, Chromium browser download (with system deps on Linux), and verifies everything is ready.
+
+Alternatively, step by step:
+
+```bash
 npm ci
 npx playwright install --with-deps chromium   # Linux (installs system deps)
 npx playwright install chromium                # macOS / Windows
 npm run preflight                              # verify everything is ready
 ```
 
-Optional OS-specific bootstraps:
+Optional OS-specific bootstraps (Xvfb, Keychain, DPAPI):
 
 ```bash
 npm run setup:linux     # Xvfb + system deps
