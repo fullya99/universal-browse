@@ -12,6 +12,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "unibrowse": "node src/cli.js",
     "test": "node --test",
     "preflight": "node scripts/preflight.js",
     "setup:linux": "bash scripts/setup-linux.sh",

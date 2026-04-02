@@ -26,6 +26,12 @@ npm run preflight
 npx playwright install --with-deps chromium
 ```
 
+For local repo execution without global install, use:
+
+```bash
+npm run unibrowse -- status
+```
+
 ## Command patterns
 
 ```bash

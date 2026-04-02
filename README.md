@@ -185,6 +185,13 @@ npm test
 npm run preflight
 ```
 
+For local repo usage (without global install), run the CLI via:
+
+```bash
+npm run unibrowse -- status
+npm run unibrowse -- goto https://example.com
+```
+
 ## License
 
 MIT. See `LICENSE`.

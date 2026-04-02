@@ -34,6 +34,26 @@ function formatA11y(node, depth = 0, lines = []) {
   return lines;
 }
 
+async function renderSnapshot(page) {
+  if (!page || (typeof page.isClosed === "function" && page.isClosed())) {
+    throw new Error("Page is not available");
+  }
+
+  const accessibility = page.accessibility;
+  if (accessibility && typeof accessibility.snapshot === "function") {
+    const tree = await accessibility.snapshot({ interestingOnly: false });
+    return formatA11y(tree).join("\n");
+  }
+
+  const body = page.locator("body");
+  if (body && typeof body.ariaSnapshot === "function") {
+    const aria = await body.ariaSnapshot();
+    return typeof aria === "string" ? aria : String(aria || "");
+  }
+
+  throw new Error("Accessibility snapshot API is unavailable in this Playwright runtime");
+}
+
 export class BrowserManager {
   constructor(strategy) {
     this.strategy = strategy;
@@ -120,8 +140,12 @@ export class BrowserManager {
         return truncate(text);
       }
       case "snapshot": {
-        const tree = await this.page.accessibility.snapshot({ interestingOnly: false });
-        return formatA11y(tree).join("\n");
+        try {
+          return await renderSnapshot(this.page);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(`Snapshot failed: ${msg}`);
+        }
       }
       case "click": {
         const selector = args[0];

@@ -9,6 +9,10 @@ Scope:
 - Platform-specific dependencies and display strategy
 - Security expectations (localhost binding, token-protected routes, safe file paths)
 
+CLI invocation note:
+- In a local clone, prefer `npm run unibrowse -- <command>`.
+- `npx unibrowse` may not resolve unless the package is globally linked/installed.
+
 ## 1) Test Rules
 
 - Run tests on real hosts (or CI runners) for each OS.
