@@ -98,50 +98,23 @@ For a complete adapter playbook (CLI + IDE), see `skill/universal-browse/referen
 ```text
 You are in the root of the universal-browse repository.
 
-Goal:
-- install dependencies
-- run OS-appropriate setup
-- validate runtime
-- print a short PASS/FAIL report with evidence
+Use this helper as the source of truth:
+- skill/universal-browse/references/ai-cli-integration.md
 
-Rules:
+Execute section "2) One prompt to install and validate" exactly, then apply section "4) Acceptance checklist for \"plugged\" status".
+
+Constraints:
 - do not commit or push
 - do not modify source files
 - stop on destructive actions
 - show each command before running it
 
-Steps:
-1) Sync and environment
-   - git pull origin main
-   - node -v
-   - npm -v
-
-2) Install
-   - npm ci
-   - if OS is Linux: npx playwright install --with-deps chromium
-   - if OS is macOS/Windows: npx playwright install chromium
-   - if OS is Linux: npm run setup:linux (continue on non-fatal package manager errors)
-   - if OS is macOS: npm run setup:macos
-   - if OS is Windows: npm run setup:windows
-
-3) Validate
-   - npm run preflight
-   - npm test
-
-4) Smoke test CLI
-   - npm run unibrowse -- stop
-   - npm run unibrowse -- status
-   - npm run unibrowse -- goto https://example.com
-   - npm run unibrowse -- snapshot
-   - npm run unibrowse -- screenshot
-   - npm run unibrowse -- stop
-
-5) Print final report
-   - overall result: PASS or FAIL
-   - OS, Node version, npm version
-   - each step with command + status
-   - exact failing output if any
-   - next action list if failed
+Output format:
+- PASS or FAIL
+- OS + Node + npm versions
+- command-by-command status
+- exact failing output if any
+- next actions if failed
 ```
 
 ### Tool-specific note
