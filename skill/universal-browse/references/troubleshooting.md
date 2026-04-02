@@ -34,3 +34,14 @@ npx unibrowse status
   - verify PowerShell is available (`powershell -Command "$PSVersionTable.PSVersion"` or `pwsh -Command "$PSVersionTable.PSVersion"`).
 - `db_locked`:
   - close the browser fully, then retry import.
+
+## Claude Code native/plugin install issues
+
+- `claude plugin add` fails with `unknown command 'add'`:
+  - use `claude plugin validate .` then `claude --plugin-dir .` for local plugin development.
+  - for persistent plugin installs, use `claude plugin install <plugin>@<marketplace>`.
+- `No manifest found` during plugin validation:
+  - ensure `.claude-plugin/plugin.json` exists at repository root.
+- Need deterministic native install without marketplace:
+  - project scope: `npm run install:claude:project`
+  - personal scope: `npm run install:claude:personal`

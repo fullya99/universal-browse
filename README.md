@@ -136,7 +136,7 @@ Output format:
 
 ### Where to plug instructions by tool
 
-- Claude Code: native skill in `.claude/skills/universal-browse/SKILL.md` or plugin via `claude plugin add ...` (`CLAUDE.md` is supporting memory)
+- Claude Code: native skill in `.claude/skills/universal-browse/SKILL.md` (recommended) or plugin workflow (`claude plugin validate .` + optional marketplace install); `CLAUDE.md` is supporting memory
 - Codex CLI: `AGENTS.md` / `AGENTS.override.md` (native discovery)
 - OpenCode: `AGENTS.md` (native, via `/init`)
 - Cursor/Windsurf/other IDE agents: workspace rules/instructions file
@@ -146,19 +146,34 @@ Output format:
 
 If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md`, but report status as `READY-RUNTIME-ONLY` until native registration is available.
 
-### Claude Code plugin install (optional but recommended)
+### Claude Code native install (recommended)
 
-If you want `universal-browse` available as a registered Claude Code skill/plugin (not only as runtime commands), install the plugin explicitly:
+Install the skill file directly in Claude native scope:
 
 ```bash
-# Local path (development)
-claude plugin add /path/to/universal-browse
+# project-native
+npm run install:claude:project
 
-# Or directly from GitHub (shareable)
-claude plugin add https://github.com/fullya99/universal-browse
+# personal-native
+npm run install:claude:personal
 ```
 
-After install, Claude Code can load `skill/universal-browse/SKILL.md` directly via plugin discovery.
+This path is deterministic and does not require marketplace setup.
+
+### Claude Code plugin workflow (optional)
+
+For plugin development in this repository:
+
+```bash
+claude plugin validate .
+claude --plugin-dir .
+```
+
+For persistent plugin installs, use a configured marketplace:
+
+```bash
+claude plugin install universal-browse@<marketplace>
+```
 
 ## How it works
 

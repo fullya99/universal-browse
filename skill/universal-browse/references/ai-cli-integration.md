@@ -48,7 +48,7 @@ Objectives:
 Before setup, ask the user these choices and wait for answers:
 1) Target tool: Claude Code / Codex CLI / OpenCode / Gemini CLI / Kimi Code CLI / other
 2) Install scope: project-native / personal-native / runtime-only fallback
-3) If Claude Code: plugin install (`claude plugin add ...`) or project skill file (`.claude/skills/universal-browse/SKILL.md`)
+3) If Claude Code: native standalone install (`npm run install:claude:project|personal`) or plugin mode (`claude plugin validate .`, then plugin install only if marketplace is configured)
 4) If native registration fails: stop with NOT READY or continue as READY-RUNTIME-ONLY
 
 Rules:
@@ -70,7 +70,7 @@ Execution plan:
 
 Apply these defaults unless the user chooses otherwise:
 
-- Claude Code: prefer plugin install for shareable native skill distribution.
+- Claude Code: prefer standalone native skill install first (`.claude/skills/...`) for deterministic setup, then optional plugin validation/install.
 - Codex CLI: prefer project `AGENTS.md`; use `~/.codex/AGENTS.md` only if user asks global scope.
 - OpenCode: prefer project `AGENTS.md` via `/init`.
 - Gemini CLI: prefer project `GEMINI.md`.
@@ -84,7 +84,9 @@ Use the first exact match. Do not downgrade to generic files if a native locatio
 
 - Claude Code
   - native skill location: `.claude/skills/universal-browse/SKILL.md` (project) or `~/.claude/skills/universal-browse/SKILL.md` (personal)
-  - native plugin path (recommended for distribution): `claude plugin add <repo-path-or-url>`
+  - native standalone installer: `npm run install:claude:project` or `npm run install:claude:personal`
+  - plugin dev proof path: `claude plugin validate .` then `claude --plugin-dir .`
+  - plugin persistent install path (marketplace): `claude plugin install <plugin>@<marketplace>`
   - proof command: ask Claude for available skills and verify `/universal-browse` exists
 - Codex CLI
   - native instructions: `AGENTS.md` (or `AGENTS.override.md`) per Codex discovery
@@ -193,14 +195,23 @@ Use the same contract, then store it in the tool's project instruction channel.
 
 ### Claude Code
 
-- Prefer plugin or `.claude/skills/universal-browse/SKILL.md` for true native skill behavior.
+- Prefer `.claude/skills/universal-browse/SKILL.md` for deterministic native setup.
 - `CLAUDE.md` is supporting memory, not a native skill install by itself.
-- Plugin registration (recommended):
+- Standalone native install (recommended):
 
 ```bash
-claude plugin add /path/to/universal-browse
+npm run install:claude:project
 # or
-claude plugin add https://github.com/fullya99/universal-browse
+npm run install:claude:personal
+```
+
+- Plugin workflow (optional):
+
+```bash
+claude plugin validate .
+claude --plugin-dir .
+# persistent install requires marketplace registration:
+# claude plugin install universal-browse@<marketplace>
 ```
 
 ### Codex CLI
@@ -240,6 +251,8 @@ claude plugin add https://github.com/fullya99/universal-browse
 
 - `npx unibrowse` not found: use `npm run unibrowse -- <command>`.
 - runtime PASS but native not installed: mark `READY-RUNTIME-ONLY`, not full success.
+- `claude plugin add` unknown command: use `claude plugin validate .` + `claude --plugin-dir .` for local plugin dev, or `claude plugin install <plugin>@<marketplace>` for persistent installs.
+- `No manifest found` during plugin validation: add `.claude-plugin/plugin.json` at repo root.
 - Linux headed without display: install Xvfb or use headless mode.
 - macOS cookie decrypt blocked: keychain approval required.
 - Windows cookie decrypt blocked: run under the same user profile and ensure PowerShell is available.
