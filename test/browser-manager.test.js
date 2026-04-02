@@ -128,7 +128,7 @@ test("cookie-import strict mode requires explicit acknowledgement flag", async (
   assert.match(allowed, /OK: loaded 1 cookies/);
 });
 
-test("cookie-import-browser rejects unknown flags", async () => {
+test("cookie-import-browser is retired", async () => {
   const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
   manager.page = {
     context() {
@@ -138,14 +138,14 @@ test("cookie-import-browser rejects unknown flags", async () => {
     },
   };
 
-  await assert.rejects(manager.exec("cookie-import-browser", ["--unknown-flag"]), /Unknown flag/);
+  await assert.rejects(manager.exec("cookie-import-browser", ["brave"]), /has been retired/);
 });
 
 test("scroll command scrolls in requested direction", async () => {
   const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
   manager.page = {
     async evaluate(_fn, delta) {
-      return delta > 0 ? 250 : 130;
+      return delta > 0 ? { before: 0, after: 250 } : { before: 250, after: 130 };
     },
   };
 
@@ -166,6 +166,18 @@ test("eval command evaluates expression", async () => {
 
   const output = await manager.exec("eval", ["1", "+", "2"]);
   assert.equal(output, "3");
+});
+
+test("eval command returns warning when context is destroyed", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    async evaluate() {
+      throw new Error("Execution context was destroyed, most likely because of a navigation.");
+    },
+  };
+
+  const output = await manager.exec("eval", ["document.title"]);
+  assert.equal(output, "WARN: context_destroyed - page may still be navigating");
 });
 
 test("launch-with-profile validates and relaunches with native profile", async () => {

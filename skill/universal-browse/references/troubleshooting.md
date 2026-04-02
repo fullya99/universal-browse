@@ -33,9 +33,8 @@ npx unibrowse status
   - ensure you run from the same Windows user account that owns the browser profile.
   - verify PowerShell is available (`powershell -Command "$PSVersionTable.PSVersion"` or `pwsh -Command "$PSVersionTable.PSVersion"`).
 - Windows App-Bound Encryption detected (`abe_unsupported`):
-  - Chromium profile uses `app_bound_encrypted_key`; DPAPI-only import is intentionally blocked.
-  - run interactive fallback: `npm run unibrowse -- cookie-import-browser chrome` (or brave/edge).
-  - for diagnostics, query `GET /cookie-picker/debug?browser=<name>&profile=<profile>`.
+  - Chromium profile uses `app_bound_encrypted_key`; direct browser-cookie decrypt/import is intentionally disabled.
+  - use native profile mode instead: `npm run unibrowse -- launch-with-profile brave --profile Default` (or chrome/edge).
 - `db_locked`:
   - close the browser fully, then retry import.
 - `launch-with-profile` fails with lock/singleton error:
@@ -62,6 +61,12 @@ npx unibrowse status
 - Workaround:
   - complete and keep Google-authenticated workflows in a regular browser profile,
   - do not rely on cookie replay as a guaranteed auth transfer for Google properties.
+
+## Cloudflare challenge and TLS fingerprinting
+
+- Symptom: `goto` lands on challenge page (`Just a moment...` / `Checking your browser`).
+- Runtime behavior: `goto` detects challenge patterns, attempts headed mode, captures screenshot, and tries common challenge clicks.
+- Limitation: some sites still block automation due to TLS/client fingerprint signals (JA3/JA4 style), even in headed/native profile mode.
 
 ## Claude Code native install issues
 

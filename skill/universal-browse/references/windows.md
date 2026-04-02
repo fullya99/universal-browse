@@ -13,9 +13,10 @@ npm run setup:windows
 
 ## Cookie importer notes
 
-- Browser profile import uses Windows DPAPI + Chromium `Local State` key extraction.
-- If import fails, close the source browser completely and retry.
-- On Chromium/Brave with App-Bound Encryption (ABE), direct decrypt may fail for all cookies; use JSON export + `cookie-import` fallback.
+- Direct browser-cookie decrypt/import is retired on Windows for reliability.
+- Preferred paths are:
+  - native profile mode (`launch-with-profile`) for real authenticated browsing,
+  - JSON cookie import (`cookie-import`) when you explicitly control exported cookie files.
 - If `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` is enabled, append `--allow-plaintext-cookies` to `cookie-import`.
 
 ## Native profile mode

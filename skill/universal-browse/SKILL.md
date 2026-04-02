@@ -46,9 +46,6 @@ npm run unibrowse -- screenshot /tmp/proof.png
 npm run unibrowse -- console
 npm run unibrowse -- network
 npm run unibrowse -- cookie-import /tmp/cookies.json
-npm run unibrowse -- cookie-import-browser chrome --domain .github.com --profile Default
-npm run unibrowse -- cookie-import-browser chrome --list-domains --profile Default
-npm run unibrowse -- cookie-import-browser chrome
 npm run unibrowse -- launch-with-profile brave --profile Default
 ```
 
@@ -56,14 +53,15 @@ npm run unibrowse -- launch-with-profile brave --profile Default
 
 - `cookie-import <json-file>` imports Playwright-style cookies from local JSON.
 - `cookie-import <json-file> --allow-plaintext-cookies` is accepted and can be required when `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1`.
-- `cookie-import-browser <browser> --domain <domain> [--profile <profile>]` decrypts and imports from installed Chromium-based browsers.
-- `cookie-import-browser <browser> --list-domains [--profile <profile>]` prints domain inventory as text for automation/agents.
-- `cookie-import-browser <browser>` opens the local cookie picker UI for profile/domain selection.
 - `launch-with-profile <chrome|brave|edge> [--profile <name>]` relaunches runtime with a native browser profile (`User Data`) for sites that reject cookie replay in fresh contexts.
-- Unknown flags on `cookie-import-browser` return an explicit usage error.
-- Picker routes are local-only (`127.0.0.1`) and token-protected for data/action requests.
 - `cookies` output masks cookie values by default; do not expose raw cookie files in logs.
 - Launch-with-profile is sensitive: close the source browser first and treat automation output/logs as potentially containing live account data.
+
+## Challenge protocol
+
+- `goto` auto-detects common challenge pages (Cloudflare/anti-bot patterns).
+- If detected in headless mode, runtime attempts to switch to headed mode before continuing challenge handling.
+- Runtime captures a screenshot and attempts common challenge interactions, then reports whether challenge was cleared.
 
 ## Linux VPS strategy
 

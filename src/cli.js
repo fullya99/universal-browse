@@ -104,7 +104,6 @@ async function run() {
         "  screenshot [path]",
         "  cookies",
         "  cookie-import <json-file> [--allow-plaintext-cookies]",
-        "  cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]",
         "  launch-with-profile <chrome|brave|edge> [--profile name]",
         "  console",
         "  network",

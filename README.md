@@ -17,7 +17,7 @@ Universal, persistent browser runtime for AI coding workflows.
 - macOS
 - Windows
 
-It also includes a complete Chromium cookie importer suite (JSON import, browser-profile import, and interactive picker UI), ported for long-term Node compatibility.
+It includes practical session transfer paths for real-world use (JSON cookie import + native browser profile launch), ported for long-term Node compatibility.
 
 ## Why this project exists
 
@@ -41,9 +41,7 @@ Most browser automation tools are either:
 - Linux/macOS/Windows display strategy detection (`headless-native`, `headed-native`, `headed-xvfb`)
 - Full cookie importer:
   - `cookie-import <json-file>`
-  - `cookie-import-browser <browser> --domain <domain> [--profile <profile>]`
-  - `cookie-import-browser <browser> --list-domains [--profile <profile>]`
-  - interactive picker at `/cookie-picker`
+  - `launch-with-profile <chrome|brave|edge> [--profile <name>]`
 - Decryption support for Chromium-style cookies (macOS `v10`, Linux `v10`/`v11`, Windows DPAPI + AES-GCM with explicit App-Bound Encryption detection)
 
 ## Quickstart
@@ -84,8 +82,7 @@ Cookie flow:
 
 ```bash
 npm run unibrowse -- cookie-import /tmp/cookies.json
-npm run unibrowse -- cookie-import-browser chrome --domain .github.com --profile Default
-npm run unibrowse -- cookie-import-browser chrome
+npm run unibrowse -- launch-with-profile brave --profile Default
 ```
 
 ## AI-assisted installation protocol
@@ -230,23 +227,16 @@ Environment toggles:
 - `UNIVERSAL_BROWSE_MODE=headless|headed`
 - `UNIVERSAL_BROWSE_XVFB=0|1` (disable/enable Xvfb fallback)
 
-## Cookie importer details
+## Session transfer details
 
-The browser importer reads Chromium profile cookie DBs and converts them into Playwright-compatible cookies.
-
-- Supported families: Chrome, Chromium, Brave, Edge, Arc, Comet (when installed)
-- Profile discovery: `Default` and `Profile N`
-- Domain-scoped import for precise session transfer
-- macOS keychain integration (`security`) and Linux secret service integration (`secret-tool`)
-- Windows DPAPI + Chromium `Local State` master-key decryption
-- App-Bound Encryption (`app_bound_encrypted_key`) detection with explicit `abe_unsupported` error and picker fallback guidance
-- Safe fallback for locked DBs by reading from temporary copied SQLite DB files
+- `cookie-import <json-file>` loads Playwright-style cookies from local JSON.
+- `launch-with-profile <chrome|brave|edge> --profile <name>` runs against a real installed browser profile.
+- For Windows reliability, native profile mode is preferred over direct browser-cookie decryption.
 
 ## Security model
 
 - Daemon binds to localhost only
 - Command endpoint requires bearer token
-- Cookie picker data/action routes are token-protected
 - Path checks on local JSON cookie import
 - `cookies` command output masks cookie values by default
 - Treat JSON cookie exports as secrets (delete after use)
@@ -273,7 +263,6 @@ network
 cookies
 cookie-import <json-file>
 cookie-import <json-file> --allow-plaintext-cookies
-cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]
 launch-with-profile <chrome|brave|edge> [--profile name]
 ```
 
@@ -281,6 +270,12 @@ Google account note:
 
 - Even with valid exported cookies, Google services (Gmail/Drive/Docs/GAIA) may reject imported sessions in a fresh Playwright context due to device/session binding controls.
 - In those cases, `cookie-import` is not a reliable auth transfer mechanism for Google properties.
+
+Challenge handling note:
+
+- `goto` detects common Cloudflare/anti-bot challenge states.
+- If a challenge is detected while running headless, runtime attempts to switch to headed automatically.
+- Runtime captures a challenge screenshot and attempts common interaction clicks before returning status.
 
 Native profile launch note:
 

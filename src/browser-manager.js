@@ -2,14 +2,6 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import {
-  CookieImportError,
-  findInstalledBrowsers,
-  importCookies,
-  listDomains,
-  listSupportedBrowserNames,
-} from "./cookie-import-browser.js";
 
 function truncate(text, max = 12000) {
   if (typeof text !== "string") return "";
@@ -91,6 +83,18 @@ const SENSITIVE_COOKIE_NAMES = new Set([
   "access_token",
   "refresh_token",
 ]);
+
+const CHALLENGE_TITLE_PATTERNS = ["just a moment", "checking your browser", "un instant", "attention required"];
+
+const CHALLENGE_SELECTORS = [
+  "input[type='checkbox']",
+  "button[type='submit']",
+  "button:has-text('Verify')",
+  "button:has-text('I am human')",
+  "button:has-text('Continue')",
+  "[data-testid='challenge-stage'] button",
+  "iframe[src*='challenges.cloudflare.com']",
+];
 
 function redactCookieValue(name, value) {
   const raw = typeof value === "string" ? value : String(value ?? "");
@@ -243,50 +247,24 @@ function isRecoverableSnapshotError(message) {
   return /(page is not available|target page, context or browser has been closed|has been closed)/i.test(message);
 }
 
-function parseCookieImportBrowserArgs(args) {
-  const parsed = {
-    browser: "chrome",
-    domain: null,
-    profile: "Default",
-    listDomains: false,
+async function inspectChallenge(page) {
+  const title = String((await page.title().catch(() => "")) || "").trim();
+  const url = String((page.url && page.url()) || "");
+  const lowerTitle = title.toLowerCase();
+  const titleHit = CHALLENGE_TITLE_PATTERNS.some((pattern) => lowerTitle.includes(pattern));
+  const urlHit = /__cf_chl|\/cdn-cgi\/challenge-platform\//i.test(url);
+  const markerHit = await page
+    .evaluate(() => {
+      const hasTurnstile = Boolean(document.querySelector("iframe[src*='challenges.cloudflare.com']"));
+      const hasChallengeRoot = Boolean(document.querySelector("#challenge-stage, [data-testid='challenge-stage']"));
+      return hasTurnstile || hasChallengeRoot;
+    })
+    .catch(() => false);
+  return {
+    isChallenge: titleHit || urlHit || markerHit,
+    title,
+    url,
   };
-
-  const positional = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--domain") {
-      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
-        throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
-      }
-      parsed.domain = args[i + 1];
-      i++;
-      continue;
-    }
-    if (arg === "--profile") {
-      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
-        throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
-      }
-      parsed.profile = args[i + 1];
-      i++;
-      continue;
-    }
-    if (arg === "--list-domains") {
-      parsed.listDomains = true;
-      continue;
-    }
-    if (arg.startsWith("--")) {
-      throw new Error(`Unknown flag: ${arg}`);
-    }
-    positional.push(arg);
-  }
-
-  if (positional.length > 1) {
-    throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
-  }
-  if (positional.length === 1) {
-    parsed.browser = positional[0];
-  }
-  return parsed;
 }
 
 async function renderSnapshot(page) {
@@ -320,6 +298,7 @@ export class BrowserManager {
     this.maxLogEntries = 2000;
     this.serverPort = null;
     this.lastKnownUrl = "about:blank";
+    this.realProfileSpec = null;
   }
 
   setServerPort(port) {
@@ -341,6 +320,7 @@ export class BrowserManager {
     this.page = await this.context.newPage();
     this.wireEvents(this.page);
     this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
+    this.realProfileSpec = null;
   }
 
   async launchWithRealProfile(browser, profile = "Default") {
@@ -382,8 +362,75 @@ export class BrowserManager {
     this.page = pages.length > 0 ? pages[0] : await this.context.newPage();
     this.wireEvents(this.page);
     this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
+    this.realProfileSpec = spec;
 
     return spec;
+  }
+
+  async ensureHeadedForChallenge() {
+    if (!this.strategy.useHeadless) {
+      return { switched: false, note: "already headed" };
+    }
+
+    const previousUseHeadless = this.strategy.useHeadless;
+    const previousMode = this.strategy.mode;
+    this.strategy.useHeadless = false;
+    this.strategy.mode = "headed-native";
+
+    try {
+      if (this.realProfileSpec) {
+        await this.launchWithRealProfile(this.realProfileSpec.browser, this.realProfileSpec.profile);
+      } else {
+        await this.close();
+        await this.launch();
+      }
+      return { switched: true, note: "switched to headed mode for challenge handling" };
+    } catch (err) {
+      this.strategy.useHeadless = previousUseHeadless;
+      this.strategy.mode = previousMode;
+      if (!this.page) {
+        try {
+          await this.launch();
+        } catch {}
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return { switched: false, note: `failed to switch to headed mode: ${message}` };
+    }
+  }
+
+  async solveChallengeInteractively() {
+    const screenshotPath = path.join(os.tmpdir(), `universal-browse-challenge-${Date.now()}.png`);
+    await this.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+
+    const clickedSelectors = [];
+    for (const selector of CHALLENGE_SELECTORS) {
+      try {
+        const locator = this.page.locator(selector).first();
+        const count = await this.page.locator(selector).count();
+        if (count <= 0) continue;
+        await locator.click({ timeout: 2000, force: true });
+        clickedSelectors.push(selector);
+      } catch {}
+    }
+
+    await this.page.waitForTimeout(2200);
+    const after = await inspectChallenge(this.page);
+    if (after.isChallenge) {
+      return [
+        `WARN: CHALLENGE_DETECTED title='${after.title || "(empty)"}'`,
+        `url: ${after.url || this.page.url()}`,
+        `screenshot: ${screenshotPath}`,
+        `actions: ${clickedSelectors.length > 0 ? `clicked ${clickedSelectors.length} candidate elements` : "no clickable challenge element found"}`,
+        "hint: use `launch-with-profile <chrome|brave|edge> --profile Default` in headed mode for manual challenge completion.",
+      ].join("\n");
+    }
+
+    this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
+    return [
+      `OK: challenge cleared, navigated to ${this.page.url()}`,
+      `screenshot: ${screenshotPath}`,
+      `actions: ${clickedSelectors.length > 0 ? `clicked ${clickedSelectors.length} candidate elements` : "challenge cleared without clickable action"}`,
+    ].join("\n");
   }
 
   wireEvents(page) {
@@ -467,7 +514,23 @@ export class BrowserManager {
         if (!url) throw new Error("Usage: goto <url>");
         await this.page.goto(url, { waitUntil: "domcontentloaded" });
         this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
-        return `OK: navigated to ${this.page.url()}`;
+        let challenge = await inspectChallenge(this.page);
+        if (!challenge.isChallenge) return `OK: navigated to ${this.page.url()}`;
+
+        const switchResult = await this.ensureHeadedForChallenge();
+        if (switchResult.switched) {
+          await this.page.goto(url, { waitUntil: "domcontentloaded" });
+          this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
+          challenge = await inspectChallenge(this.page);
+          if (!challenge.isChallenge) {
+            return `OK: navigated to ${this.page.url()}\nINFO: ${switchResult.note}`;
+          }
+          const solved = await this.solveChallengeInteractively();
+          return `INFO: ${switchResult.note}\n${solved}`;
+        }
+
+        const solved = await this.solveChallengeInteractively();
+        return `INFO: ${switchResult.note}\n${solved}`;
       }
       case "text": {
         const text = await this.page.locator("body").innerText();
@@ -516,17 +579,30 @@ export class BrowserManager {
           throw new Error("Usage: scroll <up|down> <pixels>");
         }
         const delta = direction === "up" ? -pixels : pixels;
-        const y = await this.page.evaluate((nextDelta) => {
+        const result = await this.page.evaluate((nextDelta) => {
+          const before = Math.round(window.scrollY || window.pageYOffset || 0);
           window.scrollBy(0, nextDelta);
-          return Math.round(window.scrollY || window.pageYOffset || 0);
+          const after = Math.round(window.scrollY || window.pageYOffset || 0);
+          return { before, after };
         }, delta);
-        return `OK: scrolled ${direction} ${pixels}px (y=${y})`;
+        if (result.before === result.after) {
+          return `OK: scroll limit reached (y=${result.after})`;
+        }
+        return `OK: scrolled ${direction} ${pixels}px (y=${result.after})`;
       }
       case "eval": {
         const expression = args.join(" ").trim();
         if (!expression) throw new Error("Usage: eval <js expression>");
-        const result = await this.page.evaluate((source) => (0, eval)(source), expression);
-        return formatEvalResult(result);
+        try {
+          const result = await this.page.evaluate((source) => (0, eval)(source), expression);
+          return formatEvalResult(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (/Execution context was destroyed/i.test(message)) {
+            return "WARN: context_destroyed - page may still be navigating";
+          }
+          throw err;
+        }
       }
       case "viewport": {
         const raw = args[0] || "";
@@ -579,71 +655,14 @@ export class BrowserManager {
         return `OK: loaded ${cookies.length} cookies from ${resolved}\nWARNING: cookie files may contain live session secrets; delete file after import.`;
       }
       case "cookie-import-browser": {
-        const parsed = parseCookieImportBrowserArgs(args);
-        const browserArg = parsed.browser;
-        const profile = parsed.profile;
-
-        if (parsed.listDomains) {
-          const result = await listDomains(browserArg, profile);
-          if (!Array.isArray(result.domains) || result.domains.length === 0) {
-            return `OK: no domains found for ${browserArg} (${profile})`;
-          }
-          const lines = result.domains.map((row) => `${row.domain}\t${row.count}`);
-          return lines.join("\n");
-        }
-
-        if (parsed.domain) {
-          const domain = parsed.domain;
-          let result;
-          try {
-            result = await importCookies(browserArg, [domain], profile);
-          } catch (err) {
-            if (err instanceof CookieImportError && err.code === "abe_unsupported") {
-              throw new Error(
-                `ERROR: ${browserArg} profile '${profile}' uses App-Bound Encryption (ABE), so direct decrypt/import is not available for this domain path. ` +
-                  "Workaround: export cookies via Cookie-Editor and import with `cookie-import <file.json>`.",
-              );
-            }
-            if (err instanceof CookieImportError && err.code === "db_locked") {
-              throw new Error(
-                `ERROR: cookie database is locked for ${browserArg} profile '${profile}'. Close ${browserArg} fully and retry.`,
-              );
-            }
-            throw err;
-          }
-          if (result.cookies.length > 0) await this.page.context().addCookies(result.cookies);
-          const alias = result.aliasNote ? ` (${result.aliasNote})` : "";
-          if (result.count === 0 && result.failed > 0) {
-            throw new Error(
-              `ERROR: found ${result.failed} cookies for ${domain} from ${browserArg}, but none could be decrypted/imported. ` +
-                "Likely causes: unsupported encryption state or browser-specific protection. " +
-                "Workaround: export cookies via Cookie-Editor and import with `cookie-import <file.json>`.",
-            );
-          }
-          return `OK: imported ${result.count} cookies for ${domain} from ${browserArg}${result.failed ? ` (${result.failed} failed)` : ""}${alias}`;
-        }
-
-        const browsers = findInstalledBrowsers();
-        if (browsers.length === 0) {
-          throw new Error(`No Chromium browsers found. Supported: ${listSupportedBrowserNames().join(", ")}`);
-        }
-        if (!this.serverPort) throw new Error("Server port not available");
-        const pickerUrl = `http://127.0.0.1:${this.serverPort}/cookie-picker`;
-        try {
-          const openSpec =
-            process.platform === "darwin"
-              ? { command: "open", args: [pickerUrl] }
-              : process.platform === "win32"
-                ? { command: "cmd", args: ["/c", "start", "", pickerUrl] }
-                : { command: "xdg-open", args: [pickerUrl] };
-          const child = spawn(openSpec.command, openSpec.args, { detached: true, stdio: "ignore" });
-          child.unref();
-        } catch {}
-
-        return `Cookie picker opened at ${pickerUrl}\nDetected browsers: ${browsers.map((b) => b.name).join(", ")}`;
+        throw new Error(
+          "cookie-import-browser has been retired for reliability reasons. Use launch-with-profile <chrome|brave|edge> --profile <name>.",
+        );
       }
       case "launch-with-profile": {
         const parsed = parseLaunchWithProfileArgs(args);
+        this.strategy.useHeadless = false;
+        this.strategy.mode = "headed-native";
         const spec = await this.launchWithRealProfile(parsed.browser, parsed.profile);
         return [
           `OK: launched ${spec.displayName} native profile '${spec.profile}'`,
