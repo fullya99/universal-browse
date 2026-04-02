@@ -4,7 +4,11 @@ node_modules/
 coverage/
 .DS_Store
 .claude/
+
+# Internal / private — not for public repo
 CLAUDE.md
+PLAN-*.md
+IMPLEMENTATION-PLAN.md
 *-REPORT.md
 SKILL_CROSS_PLATFORM_TEST_PROTOCOL.md
 universal-browse-skill.zip
