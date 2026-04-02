@@ -41,4 +41,9 @@ run(process.execPath, playwrightArgs, playwrightLabel);
 // Step 3: Preflight verification
 run(process.execPath, ["scripts/preflight.js"], "Running preflight checks");
 
+// Platform hints
+if (isLinux) {
+  process.stdout.write(`${label} Hint: for headed mode on a VPS, install Xvfb: sudo apt-get install -y xvfb\n`);
+}
+
 process.stdout.write(`\n${label} Setup complete. Run: npm run unibrowse -- status\n`);

@@ -21,9 +21,6 @@
     "preflight": "node scripts/preflight.js",
     "install:claude:project": "node scripts/install-claude-skill.js --scope project --force",
     "install:claude:personal": "node scripts/install-claude-skill.js --scope personal --force",
-    "setup:linux": "bash scripts/setup-linux.sh",
-    "setup:macos": "bash scripts/setup-macos.sh",
-    "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1",
     "install:claude:zip": "cd skill && zip -r ../universal-browse-skill.zip universal-browse/",
     "prepare": "husky"
   },

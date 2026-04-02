@@ -38,14 +38,6 @@ npx playwright install chromium                # macOS / Windows
 npm run preflight
 ```
 
-OS-specific setup scripts:
-
-```bash
-npm run setup:linux
-npm run setup:macos
-npm run setup:windows
-```
-
 ## 30-second smoke test
 
 ```bash
@@ -264,13 +256,13 @@ universal-browse/
 │   ├── references/
 │   └── tests/eval.json
 ├── scripts/
-│   ├── preflight.js
-│   ├── install-claude-skill.js
-│   ├── setup-linux.sh
-│   ├── setup-macos.sh
-│   └── setup-windows.ps1
-├── .github/workflows/ci.yml
-└── eslint.config.js
+│   ├── setup.js                  # One-command cross-platform setup
+│   ├── postinstall.js            # Auto-install Chromium after npm install
+│   ├── preflight.js              # Environment checks
+│   └── install-claude-skill.js   # Skill installer (recursive copy)
+├── eslint.config.js
+├── .husky/pre-commit
+└── .github/workflows/ci.yml
 ```
 
 ## Architecture notes
