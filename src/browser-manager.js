@@ -312,12 +312,14 @@ export class BrowserManager {
   async launch() {
     const args = [];
     if (this.strategy.noSandbox) args.push("--no-sandbox");
+    if (this.strategy.extraArgs) args.push(...this.strategy.extraArgs);
     this.browser = await chromium.launch({
       headless: this.strategy.useHeadless,
       args,
     });
     this.context = await this.browser.newContext({ viewport: { width: 1280, height: 720 } });
     this.page = await this.context.newPage();
+    this.page.setDefaultTimeout(10000);
     this.wireEvents(this.page);
     this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
     this.realProfileSpec = null;
@@ -413,7 +415,7 @@ export class BrowserManager {
       } catch {}
     }
 
-    await this.page.waitForTimeout(2200);
+    await this.page.waitForTimeout(1200);
     const after = await inspectChallenge(this.page);
     if (after.isChallenge) {
       return [
@@ -510,8 +512,10 @@ export class BrowserManager {
       case "status":
         return this.getStatus();
       case "goto": {
-        const url = args[0];
-        if (!url) throw new Error("Usage: goto <url>");
+        const skipChallenge = args.includes("--no-challenge");
+        const positionalGoto = args.filter((a) => a !== "--no-challenge");
+        const url = positionalGoto[0];
+        if (!url) throw new Error("Usage: goto <url> [--no-challenge]");
         let parsed;
         try {
           parsed = new URL(url);
@@ -523,6 +527,9 @@ export class BrowserManager {
         }
         await this.page.goto(url, { waitUntil: "domcontentloaded" });
         this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
+
+        if (skipChallenge) return `OK: navigated to ${this.page.url()}`;
+
         let challenge = await inspectChallenge(this.page);
         if (!challenge.isChallenge) return `OK: navigated to ${this.page.url()}`;
 
@@ -563,16 +570,30 @@ export class BrowserManager {
         }
       }
       case "click": {
-        const selector = args[0];
-        if (!selector) throw new Error("Usage: click <selector>");
-        await this.page.locator(selector).first().click();
+        const timeoutIdx = args.indexOf("--timeout");
+        const clickTimeout = timeoutIdx !== -1 ? Number(args[timeoutIdx + 1]) : 5000;
+        const clickArgs = timeoutIdx !== -1
+          ? args.filter((_, i) => i !== timeoutIdx && i !== timeoutIdx + 1)
+          : args;
+        const selector = clickArgs[0];
+        if (!selector) throw new Error("Usage: click <selector> [--timeout ms]");
+        const locator = this.page.locator(selector).first();
+        await locator.waitFor({ state: "visible", timeout: clickTimeout });
+        await locator.click({ timeout: clickTimeout });
         return `OK: clicked ${selector}`;
       }
       case "fill": {
-        const selector = args[0];
-        const value = args.slice(1).join(" ");
-        if (!selector || value.length === 0) throw new Error("Usage: fill <selector> <value>");
-        await this.page.locator(selector).first().fill(value);
+        const fillTimeoutIdx = args.indexOf("--timeout");
+        const fillTimeout = fillTimeoutIdx !== -1 ? Number(args[fillTimeoutIdx + 1]) : 5000;
+        const fillArgs = fillTimeoutIdx !== -1
+          ? args.filter((_, i) => i !== fillTimeoutIdx && i !== fillTimeoutIdx + 1)
+          : args;
+        const selector = fillArgs[0];
+        const value = fillArgs.slice(1).join(" ");
+        if (!selector || value.length === 0) throw new Error("Usage: fill <selector> <value> [--timeout ms]");
+        const fillLocator = this.page.locator(selector).first();
+        await fillLocator.waitFor({ state: "visible", timeout: fillTimeout });
+        await fillLocator.fill(value, { timeout: fillTimeout });
         return `OK: filled ${selector}`;
       }
       case "wait": {
@@ -678,6 +699,32 @@ export class BrowserManager {
           `userDataDir: ${spec.userDataDir}`,
           "WARNING: this mode reuses your real browser profile and may expose live authenticated sessions/logged data to the automation context.",
         ].join("\n");
+      }
+      case "execute": {
+        const script = args.join(" ").trim();
+        if (!script) throw new Error("Usage: execute <javascript>");
+        const execResult = await this.page.evaluate(script);
+        return `OK: ${formatEvalResult(execResult)}`;
+      }
+      case "batch": {
+        const commands = args;
+        if (!commands || commands.length === 0) return [];
+        const results = [];
+        for (let i = 0; i < commands.length; i++) {
+          const parts = commands[i].trim().split(/\s+/);
+          const subCmd = parts[0];
+          const subArgs = parts.slice(1);
+          if (!subCmd) continue;
+          try {
+            const result = await this.exec(subCmd, subArgs);
+            results.push({ index: i, command: commands[i], ok: true, output: result });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            results.push({ index: i, command: commands[i], ok: false, error: message });
+            break;
+          }
+        }
+        return results;
       }
       case "console":
         return this.consoleLog;

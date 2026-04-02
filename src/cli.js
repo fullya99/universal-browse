@@ -92,14 +92,16 @@ async function run() {
         "unibrowse commands:",
         "  status",
         "  stop",
-        "  goto <url>",
+        "  goto <url> [--no-challenge]",
         "  text",
         "  snapshot",
-        "  click <selector>",
-        "  fill <selector> <value>",
+        "  click <selector> [--timeout ms]",
+        "  fill <selector> <value> [--timeout ms]",
         "  wait <ms>",
         "  scroll <up|down> <pixels>",
         "  eval <js expression>",
+        "  execute <javascript>",
+        "  batch <cmd1> <cmd2> ... [--json '<json-array>']",
         "  viewport <w>x<h>",
         "  screenshot [path]",
         "  cookies",
@@ -125,13 +127,34 @@ async function run() {
     return;
   }
 
+  let finalCmd = cmd;
+  let finalArgs = args;
+  if (cmd === "batch") {
+    const jsonIdx = args.indexOf("--json");
+    if (jsonIdx !== -1) {
+      const jsonStr = args.slice(jsonIdx + 1).join(" ");
+      try {
+        finalArgs = JSON.parse(jsonStr);
+      } catch {
+        process.stderr.write("Invalid JSON for --json batch argument\n");
+        process.exitCode = 1;
+        return;
+      }
+      if (!Array.isArray(finalArgs)) {
+        process.stderr.write("--json argument must be a JSON array of command strings\n");
+        process.exitCode = 1;
+        return;
+      }
+    }
+  }
+
   const res = await fetch(`http://${config.host}:${state.port}/command`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${state.token}`,
     },
-    body: JSON.stringify({ command: cmd, args }),
+    body: JSON.stringify({ command: finalCmd, args: finalArgs }),
   });
   const payload = await res.json();
   if (!payload.ok) {

@@ -47,14 +47,16 @@ The daemon persists between commands. No need to relaunch between navigations.
 ```text
 status                                        # start daemon / check health
 stop                                          # stop daemon
-goto <url>                                    # navigate (http/https only)
+goto <url> [--no-challenge]                   # navigate (http/https only)
 text                                          # page text content
 snapshot                                      # accessibility tree
-click <selector>                              # click element
-fill <selector> <value>                       # fill input
+click <selector> [--timeout ms]               # click element
+fill <selector> <value> [--timeout ms]        # fill input
 wait <ms>                                     # wait N milliseconds
 scroll <up|down> <pixels>                     # scroll page
 eval <js expression>                          # evaluate JS in page
+execute <javascript>                          # run JS in page context (fast)
+batch <cmd1> <cmd2> ... [--json '<array>']    # multiple commands in 1 round-trip
 viewport <w>x<h>                              # set viewport size
 screenshot [path]                             # save screenshot
 console                                       # browser console logs
@@ -63,6 +65,27 @@ cookies                                       # list cookies (values redacted)
 cookie-import <json-file>                     # import cookies from JSON
 cookie-import <json-file> --allow-plaintext-cookies
 launch-with-profile <chrome|brave|edge> [--profile name]
+```
+
+## Speed: batch and execute
+
+For multi-step actions, use `batch` (one HTTP round-trip) or `execute` (direct JS eval):
+
+```bash
+# Batch: multiple commands in 1 call
+npm run unibrowse -- batch \
+  'fill #email user@test.com' \
+  'fill #password pass123' \
+  'click button[type=submit]'
+
+# Windows PowerShell: use --json
+npm run unibrowse -- batch --json '["fill #email user@test.com","click #submit"]'
+
+# Execute: direct DOM manipulation (fastest)
+npm run unibrowse -- execute "document.querySelector('#email').value='test@test.com'"
+
+# Skip challenge detection for known-safe URLs
+npm run unibrowse -- goto https://internal-app.example.com --no-challenge
 ```
 
 ## Cookie import and session transfer

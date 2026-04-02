@@ -15,10 +15,33 @@ function isContainer(env) {
   return false;
 }
 
+function getLaunchArgs(platform, env) {
+  const args = [
+    "--no-first-run",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--disable-translate",
+  ];
+
+  if (platform === "win32") {
+    args.push("--disable-gpu");
+  }
+
+  const hasDisplay = Boolean(env.DISPLAY || env.WAYLAND_DISPLAY);
+  if (platform === "linux" && !hasDisplay) {
+    args.push("--disable-gpu", "--disable-software-rasterizer");
+  }
+
+  return args;
+}
+
 export function getDisplayStrategy({ env = process.env, platform = process.platform, mode = "headless" } = {}) {
   const hasDisplay = Boolean(env.DISPLAY || env.WAYLAND_DISPLAY);
   const xvfbEnabled = env.UNIVERSAL_BROWSE_XVFB !== "0";
   const canUseXvfb = platform === "linux" && xvfbEnabled && hasProgram("xvfb-run");
+  const extraArgs = getLaunchArgs(platform, env);
 
   if (mode === "headless") {
     return {
@@ -26,6 +49,7 @@ export function getDisplayStrategy({ env = process.env, platform = process.platf
       useHeadless: true,
       wrapWithXvfb: false,
       noSandbox: isContainer(env),
+      extraArgs,
     };
   }
 
@@ -36,6 +60,7 @@ export function getDisplayStrategy({ env = process.env, platform = process.platf
         useHeadless: false,
         wrapWithXvfb: true,
         noSandbox: isContainer(env),
+        extraArgs,
       };
     }
     return {
@@ -43,6 +68,7 @@ export function getDisplayStrategy({ env = process.env, platform = process.platf
       useHeadless: false,
       wrapWithXvfb: false,
       noSandbox: isContainer(env),
+      extraArgs,
       error:
         "Headed mode requires DISPLAY/WAYLAND_DISPLAY or xvfb-run. Install xvfb or use headless mode.",
     };
@@ -53,5 +79,6 @@ export function getDisplayStrategy({ env = process.env, platform = process.platf
     useHeadless: false,
     wrapWithXvfb: false,
     noSandbox: isContainer(env),
+    extraArgs,
   };
 }

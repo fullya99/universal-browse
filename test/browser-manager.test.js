@@ -208,6 +208,149 @@ test("launch-with-profile rejects unknown flags", async () => {
   );
 });
 
+test("batch executes multiple commands and returns results array", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    async evaluate(fn, delta) {
+      return delta > 0 ? { before: 0, after: 300 } : { before: 300, after: 0 };
+    },
+    locator() {
+      return {
+        first() {
+          return {
+            async waitFor() {},
+            async click() {},
+            async fill() {},
+          };
+        },
+      };
+    },
+  };
+
+  const results = await manager.exec("batch", [
+    "click #btn",
+    "fill #name hello",
+    "scroll down 300",
+  ]);
+  assert.equal(results.length, 3);
+  assert.equal(results[0].ok, true);
+  assert.match(results[0].output, /OK: clicked #btn/);
+  assert.equal(results[1].ok, true);
+  assert.match(results[1].output, /OK: filled #name/);
+  assert.equal(results[2].ok, true);
+  assert.match(results[2].output, /OK: scrolled down 300px/);
+});
+
+test("batch stops on error and returns partial results", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    locator() {
+      return {
+        first() {
+          return {
+            async waitFor() {
+              throw new Error("Element not found");
+            },
+            async click() {},
+          };
+        },
+      };
+    },
+  };
+
+  const results = await manager.exec("batch", [
+    "click #missing",
+    "click #never-reached",
+  ]);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].ok, false);
+  assert.match(results[0].error, /Element not found/);
+});
+
+test("batch with empty array returns empty array", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {};
+
+  const results = await manager.exec("batch", []);
+  assert.deepEqual(results, []);
+});
+
+test("execute evaluates javascript and returns result", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    async evaluate(_script) {
+      return "My Page Title";
+    },
+  };
+
+  const output = await manager.exec("execute", ["document.title"]);
+  assert.equal(output, "OK: My Page Title");
+});
+
+test("execute with empty script throws usage error", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {};
+
+  await assert.rejects(
+    manager.exec("execute", []),
+    /Usage: execute <javascript>/,
+  );
+});
+
+test("goto with --no-challenge skips challenge detection", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  let gotoUrl = null;
+  manager.page = {
+    async goto(url) {
+      gotoUrl = url;
+    },
+    url() {
+      return "https://example.com";
+    },
+    isClosed() {
+      return false;
+    },
+  };
+
+  const output = await manager.exec("goto", ["https://example.com", "--no-challenge"]);
+  assert.equal(gotoUrl, "https://example.com");
+  assert.match(output, /OK: navigated to/);
+});
+
+test("click and fill support --timeout flag", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  let capturedWaitTimeout = null;
+  let capturedClickTimeout = null;
+  let capturedFillTimeout = null;
+  manager.page = {
+    locator() {
+      return {
+        first() {
+          return {
+            async waitFor(opts) {
+              capturedWaitTimeout = opts?.timeout;
+            },
+            async click(opts) {
+              capturedClickTimeout = opts?.timeout;
+            },
+            async fill(_val, opts) {
+              capturedFillTimeout = opts?.timeout;
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await manager.exec("click", ["#btn", "--timeout", "2000"]);
+  assert.equal(capturedWaitTimeout, 2000);
+  assert.equal(capturedClickTimeout, 2000);
+
+  await manager.exec("fill", ["#input", "hello", "--timeout", "3000"]);
+  assert.equal(capturedWaitTimeout, 3000);
+  assert.equal(capturedFillTimeout, 3000);
+});
+
 test("snapshot retries once by recreating page when closed", async () => {
   const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
 

@@ -31,3 +31,43 @@ test("headed mode on windows is native", () => {
   assert.equal(result.mode, "headed-native");
   assert.equal(result.wrapWithXvfb, false);
 });
+
+test("extraArgs includes common fast-launch flags", () => {
+  const result = getDisplayStrategy({
+    platform: "darwin",
+    mode: "headless",
+    env: {},
+  });
+  assert.ok(Array.isArray(result.extraArgs));
+  assert.ok(result.extraArgs.includes("--no-first-run"));
+  assert.ok(result.extraArgs.includes("--disable-extensions"));
+  assert.ok(!result.extraArgs.includes("--disable-gpu"));
+});
+
+test("extraArgs includes --disable-gpu on windows", () => {
+  const result = getDisplayStrategy({
+    platform: "win32",
+    mode: "headless",
+    env: {},
+  });
+  assert.ok(result.extraArgs.includes("--disable-gpu"));
+});
+
+test("extraArgs includes --disable-gpu on linux without display", () => {
+  const result = getDisplayStrategy({
+    platform: "linux",
+    mode: "headless",
+    env: {},
+  });
+  assert.ok(result.extraArgs.includes("--disable-gpu"));
+  assert.ok(result.extraArgs.includes("--disable-software-rasterizer"));
+});
+
+test("extraArgs omits --disable-gpu on linux with display", () => {
+  const result = getDisplayStrategy({
+    platform: "linux",
+    mode: "headed",
+    env: { DISPLAY: ":0" },
+  });
+  assert.ok(!result.extraArgs.includes("--disable-gpu"));
+});

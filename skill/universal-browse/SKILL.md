@@ -50,7 +50,21 @@ npm run unibrowse -- click "button[type='submit']"
 npm run unibrowse -- fill "#email" "dev@example.com"
 npm run unibrowse -- scroll down 1200
 npm run unibrowse -- eval "document.title"
+npm run unibrowse -- execute "document.querySelector('#email').value='test@test.com'; document.querySelector('#submit').click()"
 npm run unibrowse -- viewport 375x812              # mobile viewport
+```
+
+#### Batch commands (fastest for multi-step actions)
+
+```bash
+# Execute multiple actions in a single round-trip
+npm run unibrowse -- batch \
+  'fill #email user@test.com' \
+  'fill #password pass123' \
+  'click button[type=submit]'
+
+# Windows PowerShell: use --json mode
+npm run unibrowse -- batch --json '["fill #email user@test.com","fill #password pass123","click button[type=submit]"]'
 ```
 
 ### Step 4: Collect evidence
@@ -93,9 +107,17 @@ Read the relevant reference for your environment:
 - Read `references/linux-vps.md` for headless VPS setup with Xvfb virtual display.
 - Read `references/ai-cli-integration.md` for registering this skill in Codex, OpenCode, Gemini, or Kimi.
 
+## Speed tips
+
+- **Use `execute` for simple DOM manipulation** (fastest — single JS eval, no selector waits)
+- **Use `batch` for mixed actions** (fast — multiple commands in one HTTP round-trip)
+- **Use individual commands only for single operations** or when you need per-command output
+- **Use `--no-challenge` on `goto`** when navigating to known-safe URLs (skips challenge detection, saves 2-5s)
+- **Use `--timeout <ms>` on `click`/`fill`** to override the default 5s element wait
+
 ## Challenge protocol
 
-`goto` auto-detects Cloudflare and anti-bot challenge pages.
+`goto` auto-detects Cloudflare and anti-bot challenge pages. Use `--no-challenge` to skip detection for known-safe URLs.
 In headless mode, the daemon attempts to switch to headed mode before retrying.
 A screenshot is captured and common challenge interactions are attempted automatically.
 
@@ -120,18 +142,27 @@ If CAPTCHA or MFA blocks automation:
 
 **Result:** Accessibility tree confirms page structure, screenshot saved as evidence.
 
-### Example 2: Fill and submit a form
+### Example 2: Fill and submit a form (batch — fast)
 
 **User says:** "Test the login form on our app"
 
 **Actions:**
 1. `npm run unibrowse -- goto https://app.example.com/login`
-2. `npm run unibrowse -- fill "#email" "test@example.com"`
-3. `npm run unibrowse -- fill "#password" "testpass123"`
-4. `npm run unibrowse -- click "button[type='submit']"`
-5. `npm run unibrowse -- snapshot`
+2. `npm run unibrowse -- batch 'fill #email test@example.com' 'fill #password testpass123' 'click button[type=submit]'`
+3. `npm run unibrowse -- snapshot`
 
-**Result:** Form submitted, snapshot shows post-login page content.
+**Result:** Form submitted in a single round-trip, snapshot shows post-login page content.
+
+### Example 2b: Fill and submit a form (execute — fastest)
+
+**User says:** "Test the login form, make it fast"
+
+**Actions:**
+1. `npm run unibrowse -- goto https://app.example.com/login`
+2. `npm run unibrowse -- execute "document.querySelector('#email').value='test@example.com'; document.querySelector('#password').value='testpass123'; document.querySelector('button[type=submit]').click()"`
+3. `npm run unibrowse -- snapshot`
+
+**Result:** Form submitted via direct DOM manipulation, minimal latency.
 
 ### Example 3: Debug network issues
 

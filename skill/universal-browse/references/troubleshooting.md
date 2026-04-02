@@ -68,6 +68,15 @@ npx unibrowse status
 - Runtime behavior: `goto` detects challenge patterns, attempts headed mode, captures screenshot, and tries common challenge clicks.
 - Limitation: some sites still block automation due to TLS/client fingerprint signals (JA3/JA4 style), even in headed/native profile mode.
 
+## Speed optimization
+
+- **Slow form fills (10+ fields):** Use `batch` to combine all fill/click actions into a single HTTP round-trip. Example: `npm run unibrowse -- batch 'fill #email user@test.com' 'fill #password pass' 'click #submit'`
+- **Slow form fills (simple DOM):** Use `execute` for direct JavaScript evaluation: `npm run unibrowse -- execute "document.querySelector('#email').value='test@test.com'"`
+- **Slow navigation to known-safe URLs:** Add `--no-challenge` to skip challenge detection: `npm run unibrowse -- goto https://internal-app.example.com --no-challenge`
+- **Slow click/fill on elements:** Default timeout is 5s (reduced from 30s). Override with `--timeout <ms>` if needed.
+- **Slow browser startup on Windows:** OS-specific launch flags (`--disable-gpu`) are now applied automatically.
+- **Windows PowerShell batch syntax:** Use `--json` mode: `npm run unibrowse -- batch --json '["fill #email user@test.com","click #submit"]'`
+
 ## Claude Code native install issues
 
 - Skill not found after install:
