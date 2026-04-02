@@ -1,0 +1,485 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+export class CookieImportError extends Error {
+  constructor(message, code, action) {
+    super(message);
+    this.name = "CookieImportError";
+    this.code = code;
+    this.action = action;
+  }
+}
+
+const BROWSER_REGISTRY = [
+  { name: "Comet", dataDir: "Comet/", keychainService: "Comet Safe Storage", aliases: ["comet", "perplexity"] },
+  {
+    name: "Chrome",
+    dataDir: "Google/Chrome/",
+    keychainService: "Chrome Safe Storage",
+    aliases: ["chrome", "google-chrome", "google-chrome-stable"],
+    linuxDataDir: "google-chrome/",
+    linuxApplication: "chrome",
+  },
+  {
+    name: "Chromium",
+    dataDir: "chromium/",
+    keychainService: "Chromium Safe Storage",
+    aliases: ["chromium"],
+    linuxDataDir: "chromium/",
+    linuxApplication: "chromium",
+  },
+  { name: "Arc", dataDir: "Arc/User Data/", keychainService: "Arc Safe Storage", aliases: ["arc"] },
+  {
+    name: "Brave",
+    dataDir: "BraveSoftware/Brave-Browser/",
+    keychainService: "Brave Safe Storage",
+    aliases: ["brave"],
+    linuxDataDir: "BraveSoftware/Brave-Browser/",
+    linuxApplication: "brave",
+  },
+  {
+    name: "Edge",
+    dataDir: "Microsoft Edge/",
+    keychainService: "Microsoft Edge Safe Storage",
+    aliases: ["edge"],
+    linuxDataDir: "microsoft-edge/",
+    linuxApplication: "microsoft-edge",
+  },
+];
+
+const CHROMIUM_EPOCH_OFFSET = 11644473600000000n;
+const keyCache = new Map();
+
+let BetterSqlite3 = null;
+
+async function getSqliteModule() {
+  if (BetterSqlite3) return BetterSqlite3;
+  try {
+    const mod = await import("better-sqlite3");
+    BetterSqlite3 = mod.default;
+    return BetterSqlite3;
+  } catch {
+    throw new CookieImportError(
+      "Missing dependency better-sqlite3. Run: npm install",
+      "sqlite_missing",
+      "retry",
+    );
+  }
+}
+
+function getHostPlatform() {
+  if (process.platform === "darwin" || process.platform === "linux") return process.platform;
+  return null;
+}
+
+function getSearchPlatforms() {
+  const current = getHostPlatform();
+  const order = [];
+  if (current) order.push(current);
+  for (const p of ["darwin", "linux"]) {
+    if (!order.includes(p)) order.push(p);
+  }
+  return order;
+}
+
+function getDataDirForPlatform(browser, platform) {
+  return platform === "darwin" ? browser.dataDir : browser.linuxDataDir || null;
+}
+
+function getBaseDir(platform) {
+  if (platform === "darwin") return path.join(os.homedir(), "Library", "Application Support");
+  return path.join(os.homedir(), ".config");
+}
+
+function resolveBrowser(nameOrAlias) {
+  const needle = String(nameOrAlias || "").toLowerCase().trim();
+  const found = BROWSER_REGISTRY.find(
+    (b) => b.aliases.includes(needle) || b.name.toLowerCase() === needle,
+  );
+  if (!found) {
+    const supported = BROWSER_REGISTRY.flatMap((b) => b.aliases).join(", ");
+    throw new CookieImportError(`Unknown browser '${nameOrAlias}'. Supported: ${supported}`, "unknown_browser");
+  }
+  return found;
+}
+
+function validateProfile(profile) {
+  if (/[/\\]|\.\./.test(profile) || /[\x00-\x1f]/.test(profile)) {
+    throw new CookieImportError(`Invalid profile name: '${profile}'`, "bad_request");
+  }
+}
+
+function findBrowserMatch(browser, profile) {
+  validateProfile(profile);
+  for (const platform of getSearchPlatforms()) {
+    const dataDir = getDataDirForPlatform(browser, platform);
+    if (!dataDir) continue;
+    const dbPath = path.join(getBaseDir(platform), dataDir, profile, "Cookies");
+    try {
+      if (fs.existsSync(dbPath)) return { browser, platform, dbPath };
+    } catch {}
+  }
+  return null;
+}
+
+function getBrowserMatch(browser, profile) {
+  const match = findBrowserMatch(browser, profile);
+  if (match) return match;
+
+  const attempted = getSearchPlatforms()
+    .map((platform) => {
+      const dataDir = getDataDirForPlatform(browser, platform);
+      return dataDir ? path.join(getBaseDir(platform), dataDir, profile, "Cookies") : null;
+    })
+    .filter(Boolean);
+
+  throw new CookieImportError(
+    `${browser.name} is not installed (no cookie database at ${attempted.join(" or ")})`,
+    "not_installed",
+  );
+}
+
+async function openDb(dbPath, browserName) {
+  const Sqlite = await getSqliteModule();
+  try {
+    const db = new Sqlite(dbPath, { readonly: true, fileMustExist: true });
+    return { db, copied: false, tmpPath: null };
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg.includes("SQLITE_BUSY") || msg.includes("database is locked")) {
+      return openDbFromCopy(dbPath, browserName);
+    }
+    if (msg.includes("SQLITE_CORRUPT") || msg.includes("malformed")) {
+      throw new CookieImportError(`Cookie database for ${browserName} is corrupt`, "db_corrupt");
+    }
+    throw err;
+  }
+}
+
+async function openDbFromCopy(dbPath, browserName) {
+  const Sqlite = await getSqliteModule();
+  const tmpPath = `/tmp/universal-browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`;
+  try {
+    fs.copyFileSync(dbPath, tmpPath);
+    const walPath = `${dbPath}-wal`;
+    const shmPath = `${dbPath}-shm`;
+    if (fs.existsSync(walPath)) fs.copyFileSync(walPath, `${tmpPath}-wal`);
+    if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, `${tmpPath}-shm`);
+    const db = new Sqlite(tmpPath, { readonly: true, fileMustExist: true });
+    return { db, copied: true, tmpPath };
+  } catch {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {}
+    throw new CookieImportError(
+      `Cookie database is locked (${browserName} may be running). Try closing ${browserName} first.`,
+      "db_locked",
+      "retry",
+    );
+  }
+}
+
+function closeDb(handle) {
+  try {
+    handle.db.close();
+  } catch {}
+  if (handle.copied && handle.tmpPath) {
+    for (const p of [handle.tmpPath, `${handle.tmpPath}-wal`, `${handle.tmpPath}-shm`]) {
+      try {
+        fs.unlinkSync(p);
+      } catch {}
+    }
+  }
+}
+
+function deriveKey(password, iterations) {
+  return crypto.pbkdf2Sync(password, "saltysalt", iterations, 16, "sha1");
+}
+
+function getCachedDerivedKey(cacheKey, password, iterations) {
+  const cached = keyCache.get(cacheKey);
+  if (cached) return cached;
+  const derived = deriveKey(password, iterations);
+  keyCache.set(cacheKey, derived);
+  return derived;
+}
+
+async function runCmd(cmd, args, timeoutMs) {
+  try {
+    const { stdout, stderr } = await execFileAsync(cmd, args, {
+      timeout: timeoutMs,
+      windowsHide: true,
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    return { ok: true, stdout: stdout || "", stderr: stderr || "" };
+  } catch (err) {
+    const stdout = typeof err?.stdout === "string" ? err.stdout : "";
+    const stderr = typeof err?.stderr === "string" ? err.stderr : "";
+    if (err?.killed || err?.signal === "SIGTERM") {
+      return { ok: false, timeout: true, stdout, stderr };
+    }
+    return { ok: false, stdout, stderr, code: err?.code, message: err?.message };
+  }
+}
+
+async function getMacKeychainPassword(service) {
+  const out = await runCmd("security", ["find-generic-password", "-s", service, "-w"], 10000);
+  if (out.timeout) {
+    throw new CookieImportError(
+      `macOS is waiting for Keychain permission. Allow access to '${service}'.`,
+      "keychain_timeout",
+      "retry",
+    );
+  }
+  if (!out.ok) {
+    const errText = `${out.stderr || out.message || ""}`.toLowerCase();
+    if (
+      errText.includes("user canceled") ||
+      errText.includes("denied") ||
+      errText.includes("interaction not allowed")
+    ) {
+      throw new CookieImportError(
+        `Keychain access denied. Click Allow in macOS dialog for '${service}'.`,
+        "keychain_denied",
+        "retry",
+      );
+    }
+    if (errText.includes("could not be found") || errText.includes("not found")) {
+      throw new CookieImportError(`No Keychain entry for '${service}'.`, "keychain_not_found");
+    }
+    throw new CookieImportError(`Could not read Keychain: ${out.stderr || out.message}`, "keychain_error", "retry");
+  }
+  return out.stdout.trim();
+}
+
+async function getLinuxSecretPassword(browser) {
+  const attempts = [["lookup", "Title", browser.keychainService]];
+  if (browser.linuxApplication) {
+    attempts.push(
+      ["lookup", "xdg:schema", "chrome_libsecret_os_crypt_password_v2", "application", browser.linuxApplication],
+      ["lookup", "xdg:schema", "chrome_libsecret_os_crypt_password", "application", browser.linuxApplication],
+    );
+  }
+  for (const args of attempts) {
+    const out = await runCmd("secret-tool", args, 3000);
+    if (out.ok && out.stdout.trim().length > 0) return out.stdout.trim();
+  }
+  return null;
+}
+
+async function getDerivedKeys(match) {
+  if (match.platform === "darwin") {
+    const password = await getMacKeychainPassword(match.browser.keychainService);
+    return new Map([
+      ["v10", getCachedDerivedKey(`darwin:${match.browser.keychainService}:v10`, password, 1003)],
+    ]);
+  }
+  const keys = new Map();
+  keys.set("v10", getCachedDerivedKey("linux:v10", "peanuts", 1));
+  const linuxPassword = await getLinuxSecretPassword(match.browser);
+  if (linuxPassword) {
+    keys.set("v11", getCachedDerivedKey(`linux:${match.browser.keychainService}:v11`, linuxPassword, 1));
+  }
+  return keys;
+}
+
+function chromiumNow() {
+  return BigInt(Date.now()) * 1000n + CHROMIUM_EPOCH_OFFSET;
+}
+
+function chromiumEpochToUnix(epoch, hasExpires) {
+  if (hasExpires === 0 || epoch === 0 || epoch === 0n) return -1;
+  const epochBig = BigInt(epoch);
+  const unixMicro = epochBig - CHROMIUM_EPOCH_OFFSET;
+  return Number(unixMicro / 1000000n);
+}
+
+function mapSameSite(value) {
+  switch (value) {
+    case 0:
+      return "None";
+    case 1:
+      return "Lax";
+    case 2:
+      return "Strict";
+    default:
+      return "Lax";
+  }
+}
+
+function decryptCookieValue(row, keys) {
+  if (row.value && row.value.length > 0) return row.value;
+  const ev = Buffer.isBuffer(row.encrypted_value)
+    ? row.encrypted_value
+    : Buffer.from(row.encrypted_value || []);
+  if (ev.length === 0) return "";
+  const prefix = ev.slice(0, 3).toString("utf8");
+  const key = keys.get(prefix);
+  if (!key) throw new Error(`No key for ${prefix}`);
+
+  const ciphertext = ev.slice(3);
+  const iv = Buffer.alloc(16, 0x20);
+  const decipher = crypto.createDecipheriv("aes-128-cbc", key, iv);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  if (plaintext.length <= 32) return "";
+  return plaintext.slice(32).toString("utf8");
+}
+
+function toPlaywrightCookie(row, value) {
+  return {
+    name: row.name,
+    value,
+    domain: row.host_key,
+    path: row.path || "/",
+    expires: chromiumEpochToUnix(row.expires_utc, row.has_expires),
+    secure: row.is_secure === 1,
+    httpOnly: row.is_httponly === 1,
+    sameSite: mapSameSite(row.samesite),
+  };
+}
+
+export function listSupportedBrowserNames() {
+  const host = getHostPlatform();
+  return BROWSER_REGISTRY.filter((b) => (host ? getDataDirForPlatform(b, host) !== null : true)).map(
+    (b) => b.name,
+  );
+}
+
+export function findInstalledBrowsers() {
+  return BROWSER_REGISTRY.filter((browser) => {
+    if (findBrowserMatch(browser, "Default") !== null) return true;
+    for (const platform of getSearchPlatforms()) {
+      const dataDir = getDataDirForPlatform(browser, platform);
+      if (!dataDir) continue;
+      const browserDir = path.join(getBaseDir(platform), dataDir);
+      try {
+        const entries = fs.readdirSync(browserDir, { withFileTypes: true });
+        if (
+          entries.some(
+            (e) =>
+              e.isDirectory() &&
+              e.name.startsWith("Profile ") &&
+              fs.existsSync(path.join(browserDir, e.name, "Cookies")),
+          )
+        ) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
+}
+
+export function listProfiles(browserName) {
+  const browser = resolveBrowser(browserName);
+  const profiles = [];
+
+  for (const platform of getSearchPlatforms()) {
+    const dataDir = getDataDirForPlatform(browser, platform);
+    if (!dataDir) continue;
+    const browserDir = path.join(getBaseDir(platform), dataDir);
+    if (!fs.existsSync(browserDir)) continue;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(browserDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name !== "Default" && !entry.name.startsWith("Profile ")) continue;
+      const cookiePath = path.join(browserDir, entry.name, "Cookies");
+      if (!fs.existsSync(cookiePath)) continue;
+      if (profiles.some((p) => p.name === entry.name)) continue;
+
+      let displayName = entry.name;
+      try {
+        const prefsPath = path.join(browserDir, entry.name, "Preferences");
+        if (fs.existsSync(prefsPath)) {
+          const prefs = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
+          const email = prefs?.account_info?.[0]?.email;
+          if (email && typeof email === "string") displayName = email;
+          else if (typeof prefs?.profile?.name === "string") displayName = prefs.profile.name;
+        }
+      } catch {}
+      profiles.push({ name: entry.name, displayName });
+    }
+
+    if (profiles.length > 0) break;
+  }
+
+  return profiles;
+}
+
+export async function listDomains(browserName, profile = "Default") {
+  const browser = resolveBrowser(browserName);
+  const match = getBrowserMatch(browser, profile);
+  const handle = await openDb(match.dbPath, browser.name);
+  try {
+    const now = chromiumNow().toString();
+    const rows = handle.db
+      .prepare(
+        `SELECT host_key AS domain, COUNT(*) AS count
+         FROM cookies
+         WHERE has_expires = 0 OR expires_utc > ?
+         GROUP BY host_key
+         ORDER BY count DESC`,
+      )
+      .all(now);
+    return { domains: rows, browser: browser.name };
+  } finally {
+    closeDb(handle);
+  }
+}
+
+export async function importCookies(browserName, domains, profile = "Default") {
+  if (!Array.isArray(domains) || domains.length === 0) {
+    return { cookies: [], count: 0, failed: 0, domainCounts: {} };
+  }
+  const browser = resolveBrowser(browserName);
+  const match = getBrowserMatch(browser, profile);
+  const keys = await getDerivedKeys(match);
+  const handle = await openDb(match.dbPath, browser.name);
+
+  try {
+    const now = chromiumNow().toString();
+    const placeholders = domains.map(() => "?").join(",");
+    const rows = handle.db
+      .prepare(
+        `SELECT host_key, name, value, encrypted_value, path, expires_utc,
+                is_secure, is_httponly, has_expires, samesite
+         FROM cookies
+         WHERE host_key IN (${placeholders})
+           AND (has_expires = 0 OR expires_utc > ?)
+         ORDER BY host_key, name`,
+      )
+      .all(...domains, now);
+
+    const cookies = [];
+    let failed = 0;
+    const domainCounts = {};
+    for (const row of rows) {
+      try {
+        const value = decryptCookieValue(row, keys);
+        const cookie = toPlaywrightCookie(row, value);
+        cookies.push(cookie);
+        domainCounts[row.host_key] = (domainCounts[row.host_key] || 0) + 1;
+      } catch {
+        failed++;
+      }
+    }
+
+    return { cookies, count: cookies.length, failed, domainCounts };
+  } finally {
+    closeDb(handle);
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "universal-browse",
+  "version": "1.0.0",
+  "description": "Universal Playwright browser daemon for Linux/macOS and VPS workflows.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "unibrowse": "./src/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "preflight": "node scripts/preflight.js",
+    "setup:linux": "bash scripts/setup-linux.sh",
+    "setup:macos": "bash scripts/setup-macos.sh"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "playwright": "^1.58.2"
+  }
+}
