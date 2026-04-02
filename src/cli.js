@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { resolveConfig, readState, clearState, ensureStateDir } from "./config.js";
 import { getDisplayStrategy } from "./display-strategy.js";
 
@@ -30,7 +31,7 @@ function startDetachedServer() {
   const strategy = getDisplayStrategy({ mode: config.mode });
   if (strategy.error) throw new Error(strategy.error);
 
-  const nodeArgs = [new URL("./server.js", import.meta.url).pathname];
+  const nodeArgs = [fileURLToPath(new URL("./server.js", import.meta.url))];
   let command = process.execPath;
   let args = nodeArgs;
   if (strategy.wrapWithXvfb) {
@@ -133,7 +134,8 @@ async function run() {
   const payload = await res.json();
   if (!payload.ok) {
     process.stderr.write(`${payload.error}\n`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (typeof payload.output === "string") {
     process.stdout.write(`${payload.output}\n`);
@@ -144,5 +146,5 @@ async function run() {
 
 run().catch((err) => {
   process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });
