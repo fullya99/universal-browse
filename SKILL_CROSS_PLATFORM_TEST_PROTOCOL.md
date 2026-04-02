@@ -15,6 +15,7 @@ Scope:
 - Use Node >= 20.
 - Capture all command outputs and errors.
 - If a step fails, log the exact command, output, and environment details, then continue when possible.
+- Always run both `headless` and `headed` checks on Windows because regressions may appear only in one mode.
 
 ## 2) Environment Matrix
 
@@ -50,6 +51,12 @@ npm ci
 npx playwright install chromium
 npm run preflight
 npm test
+```
+
+If the machine uses PowerShell 7 only, also verify:
+
+```powershell
+pwsh -Command "$PSVersionTable.PSVersion"
 ```
 
 Expected:
@@ -115,6 +122,31 @@ Remove-Item Env:UNIVERSAL_BROWSE_MODE
 
 Expected:
 - Headless and headed both work natively.
+
+## 5.1) Windows Runtime Retest Script (Mandatory)
+
+Run this exact sequence in PowerShell:
+
+```powershell
+npx unibrowse stop
+$env:UNIVERSAL_BROWSE_MODE="headless"
+npx unibrowse status
+npx unibrowse goto https://example.com
+npx unibrowse snapshot
+
+$env:UNIVERSAL_BROWSE_MODE="headed"
+npx unibrowse status
+npx unibrowse goto https://example.com
+npx unibrowse snapshot
+
+Remove-Item Env:UNIVERSAL_BROWSE_MODE
+npx unibrowse stop
+```
+
+Expected:
+- No Node crash or abrupt process exit.
+- `snapshot` returns content in both modes.
+- If snapshot fails, it must return a controlled error message (no runtime assertion crash).
 
 ## 6) Cookie Import Validation
 
@@ -190,6 +222,7 @@ Run these validations:
 - `npm run preflight` green for required checks.
 - No regression in Linux/macOS flows introduced by Windows changes.
 - CI jobs expected for Linux, macOS, and Windows.
+- `test/config.test.js` remains path-separator agnostic (no hardcoded `/tmp/...` assertions).
 
 ## 10) Defect Report Template
 
