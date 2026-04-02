@@ -2,6 +2,7 @@
 
 [![Node 20+](https://img.shields.io/badge/node-20%2B-2f7d32?style=flat-square)](https://nodejs.org)
 [![Playwright 1.58+](https://img.shields.io/badge/playwright-1.58%2B-2e8b57?style=flat-square)](https://playwright.dev)
+[![CI](https://github.com/fullya99/universal-browse/actions/workflows/ci.yml/badge.svg)](https://github.com/fullya99/universal-browse/actions/workflows/ci.yml)
 [![OS Support](https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20VPS-0f766e?style=flat-square)](#compatibility)
 [![Headless + Headed](https://img.shields.io/badge/mode-headless%20%2B%20headed-1d4ed8?style=flat-square)](#how-it-works)
 [![License MIT](https://img.shields.io/badge/license-MIT-111827?style=flat-square)](./LICENSE)
@@ -77,6 +78,39 @@ npx unibrowse cookie-import-browser chrome
 4. Commands are executed in a persistent browser context
 
 This gives stable behavior for long multi-step sessions where browser state matters.
+
+## Architecture diagram
+
+```text
+┌──────────────────────────┐
+│ Agent / Developer / CI   │
+└─────────────┬────────────┘
+              │ unibrowse <command>
+┌─────────────▼────────────┐
+│ CLI Client (src/cli.js)  │
+│ - reads local state      │
+│ - starts daemon if needed│
+└─────────────┬────────────┘
+              │ localhost + bearer token
+┌─────────────▼────────────────────────────────────┐
+│ Local Daemon (src/server.js)                     │
+│ - /health, /command                              │
+│ - /cookie-picker*                                │
+└─────────────┬────────────────────────────────────┘
+              │
+┌─────────────▼────────────────────────────────────┐
+│ Browser Manager (src/browser-manager.js)         │
+│ - persistent Playwright context                  │
+│ - command execution + logs                        │
+│ - cookie import hooks                             │
+└─────────────┬────────────────────────────────────┘
+              │
+      ┌───────▼────────┐      ┌─────────────────────────┐
+      │ Playwright     │      │ Cookie Import Engine    │
+      │ Chromium       │◄────►│ - SQLite profile reads  │
+      │ session        │      │ - v10/v11 decryption    │
+      └────────────────┘      └─────────────────────────┘
+```
 
 ## Compatibility
 

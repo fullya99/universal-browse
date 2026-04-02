@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose an improvement or new capability.
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share the user problem first, then your proposed solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: "On Linux VPS, I need ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What behavior/API would you like?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or alternatives you tried.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits and why this should be prioritized.

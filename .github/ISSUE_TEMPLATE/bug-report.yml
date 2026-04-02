@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible problem in universal-browse.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this issue. Please include concrete repro steps so we can fix it quickly.
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did the issue happen?
+      options:
+        - Linux desktop
+        - Linux VPS
+        - Linux CI
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Include Node, universal-browse commit/release, and Playwright version.
+      placeholder: "Node 22.x, universal-browse main@abc123, Playwright 1.58.x"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or workflow
+      description: Which command(s) were you running?
+      placeholder: "npx unibrowse cookie-import-browser chrome --domain .github.com"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Exact steps to reproduce.
+      placeholder: |
+        1. Run ...
+        2. Navigate to ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Paste relevant logs. Redact tokens and sensitive data.
+      render: shell
