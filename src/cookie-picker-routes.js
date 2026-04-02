@@ -6,9 +6,16 @@ import {
   listProfiles,
 } from "./cookie-import-browser.js";
 import { getCookiePickerHTML } from "./cookie-picker-ui.js";
+import {
+  parseBody as parseBodyBase,
+  unauthorized as unauthorizedBase,
+  getAuthToken,
+} from "./http-helpers.js";
 
 const importedDomains = new Set();
 const importedCounts = new Map();
+
+let lastImportTimestamp = 0;
 
 function logPickerError(pathname, err) {
   const message = err instanceof Error ? err.message : String(err);
@@ -24,21 +31,16 @@ function sendJson(res, status, payload, port) {
 }
 
 function unauthorized(res) {
-  res.writeHead(401, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "Unauthorized" }));
+  unauthorizedBase(res);
 }
 
 async function parseBody(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return raw.length === 0 ? {} : JSON.parse(raw);
+  return parseBodyBase(req);
 }
 
 function checkAuth(req, token) {
   if (!token) return true;
-  const auth = req.headers.authorization || "";
-  return auth === `Bearer ${token}`;
+  return getAuthToken(req) === token;
 }
 
 export async function handleCookiePickerRoute(req, res, url, browserManager, authToken) {
@@ -117,6 +119,12 @@ export async function handleCookiePickerRoute(req, res, url, browserManager, aut
     }
 
     if (pathname === "/cookie-picker/import" && req.method === "POST") {
+      const now = Date.now();
+      if (now - lastImportTimestamp < 2000) {
+        return sendJson(res, 429, { error: "Too many requests. Wait before retrying." }, port);
+      }
+      lastImportTimestamp = now;
+
       const body = await parseBody(req);
       const browser = body.browser;
       const profile = body.profile || "Default";

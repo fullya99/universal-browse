@@ -210,6 +210,7 @@ async function openDb(dbPath, browserName) {
   const Sqlite = await getSqliteModule();
   try {
     const db = new Sqlite(dbPath, { readonly: true, fileMustExist: true });
+    db.pragma("busy_timeout = 5000");
     return { db, copied: false, tmpPath: null };
   } catch (err) {
     const msg = String(err?.message || err);
@@ -242,6 +243,7 @@ async function openDbFromCopy(dbPath, browserName) {
       if (fs.existsSync(walPath)) fs.copyFileSync(walPath, `${tmpPath}-wal`);
       if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, `${tmpPath}-shm`);
       const db = new Sqlite(tmpPath, { readonly: true, fileMustExist: true });
+      db.pragma("busy_timeout = 5000");
       return { db, copied: true, tmpPath };
     } catch {
       for (const p of [tmpPath, `${tmpPath}-wal`, `${tmpPath}-shm`]) {
@@ -274,7 +276,7 @@ function closeDb(handle) {
   }
 }
 
-function deriveKey(password, iterations) {
+export function deriveKey(password, iterations) {
   return crypto.pbkdf2Sync(password, "saltysalt", iterations, 16, "sha1");
 }
 
@@ -464,14 +466,14 @@ function chromiumNow() {
   return BigInt(Date.now()) * 1000n + CHROMIUM_EPOCH_OFFSET;
 }
 
-function chromiumEpochToUnix(epoch, hasExpires) {
+export function chromiumEpochToUnix(epoch, hasExpires) {
   if (hasExpires === 0 || epoch === 0 || epoch === 0n) return -1;
   const epochBig = BigInt(epoch);
   const unixMicro = epochBig - CHROMIUM_EPOCH_OFFSET;
   return Number(unixMicro / 1000000n);
 }
 
-function mapSameSite(value) {
+export function mapSameSite(value) {
   switch (value) {
     case 0:
       return "None";
@@ -484,7 +486,7 @@ function mapSameSite(value) {
   }
 }
 
-async function decryptCookieValue(row, keys) {
+export async function decryptCookieValue(row, keys) {
   if (row.value && row.value.length > 0) return row.value;
   const ev = Buffer.isBuffer(row.encrypted_value)
     ? row.encrypted_value
@@ -528,7 +530,7 @@ async function decryptCookieValue(row, keys) {
 
   const prefix = ev.slice(0, 3).toString("utf8");
   const key = keys.get(prefix);
-  if (!key) throw new Error(`No key for ${prefix}`);
+  if (!key) throw new CookieImportError(`No key for ${prefix}`, "decrypt_failed");
 
   const ciphertext = ev.slice(3);
   const iv = Buffer.alloc(16, 0x20);
@@ -538,7 +540,7 @@ async function decryptCookieValue(row, keys) {
   return plaintext.slice(32).toString("utf8");
 }
 
-function toPlaywrightCookie(row, value) {
+export function toPlaywrightCookie(row, value) {
   return {
     name: row.name,
     value,

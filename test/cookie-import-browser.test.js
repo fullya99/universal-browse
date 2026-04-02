@@ -1,11 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import {
   CookieImportError,
+  deriveKey,
+  chromiumEpochToUnix,
+  mapSameSite,
+  toPlaywrightCookie,
+  decryptCookieValue,
   findInstalledBrowsers,
   importCookies,
   listDomains,
@@ -247,4 +253,104 @@ test("importCookies returns abe_unsupported when app_bound key exists on Windows
       (err) => err instanceof CookieImportError && err.code === "abe_unsupported",
     );
   });
+});
+
+// --- Crypto unit tests ---
+
+test("deriveKey produces PBKDF2 SHA-1 key of known hex", () => {
+  const key = deriveKey("peanuts", 1);
+  assert.equal(key.length, 16);
+  const expected = crypto.pbkdf2Sync("peanuts", "saltysalt", 1, 16, "sha1");
+  assert.deepEqual(key, expected);
+});
+
+test("deriveKey with 1003 iterations matches macOS key derivation", () => {
+  const key = deriveKey("testpassword", 1003);
+  assert.equal(key.length, 16);
+  const expected = crypto.pbkdf2Sync("testpassword", "saltysalt", 1003, 16, "sha1");
+  assert.deepEqual(key, expected);
+});
+
+test("decryptCookieValue AES-128-CBC v10 round-trip", async () => {
+  const password = "peanuts";
+  const derivedKey = deriveKey(password, 1);
+  const iv = Buffer.alloc(16, 0x20);
+  const plaintext = Buffer.alloc(32 + 11);
+  plaintext.fill(0, 0, 32);
+  Buffer.from("hello_world").copy(plaintext, 32);
+  const cipher = crypto.createCipheriv("aes-128-cbc", derivedKey, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const ev = Buffer.concat([Buffer.from("v10"), encrypted]);
+
+  const keys = new Map([["v10", derivedKey]]);
+  const row = { value: "", encrypted_value: ev };
+  const result = await decryptCookieValue(row, keys);
+  assert.equal(result, "hello_world");
+});
+
+test("decryptCookieValue AES-256-GCM round-trip (Windows-style)", async () => {
+  const masterKey = crypto.randomBytes(32);
+  const nonce = crypto.randomBytes(12);
+  const plaintext = Buffer.from("session_value_123");
+  const cipher = crypto.createCipheriv("aes-256-gcm", masterKey, nonce);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  const ev = Buffer.concat([Buffer.from("v10"), nonce, ciphertext, authTag]);
+
+  const keys = new Map([["win-master", masterKey]]);
+  const row = { value: "", encrypted_value: ev };
+  const result = await decryptCookieValue(row, keys);
+  assert.equal(result, "session_value_123");
+});
+
+test("decryptCookieValue returns plaintext value when available", async () => {
+  const keys = new Map();
+  const row = { value: "plain_value", encrypted_value: Buffer.alloc(0) };
+  const result = await decryptCookieValue(row, keys);
+  assert.equal(result, "plain_value");
+});
+
+test("chromiumEpochToUnix converts known timestamp", () => {
+  const unixTs = chromiumEpochToUnix(13300000000000000n, 1);
+  assert.equal(typeof unixTs, "number");
+  assert.ok(unixTs > 0);
+  // Chromium epoch 13300000000000000 = ~2022 in Unix time
+  const expectedUnix = Number((13300000000000000n - 11644473600000000n) / 1000000n);
+  assert.equal(unixTs, expectedUnix);
+});
+
+test("chromiumEpochToUnix returns -1 for session cookies", () => {
+  assert.equal(chromiumEpochToUnix(0, 0), -1);
+  assert.equal(chromiumEpochToUnix(0n, 0), -1);
+  assert.equal(chromiumEpochToUnix(12345n, 0), -1);
+});
+
+test("mapSameSite maps integer values", () => {
+  assert.equal(mapSameSite(0), "None");
+  assert.equal(mapSameSite(1), "Lax");
+  assert.equal(mapSameSite(2), "Strict");
+  assert.equal(mapSameSite(-1), "Lax");
+  assert.equal(mapSameSite(99), "Lax");
+});
+
+test("toPlaywrightCookie produces correct shape", () => {
+  const row = {
+    name: "session",
+    host_key: ".example.com",
+    path: "/app",
+    expires_utc: 13300000000000000n,
+    is_secure: 1,
+    is_httponly: 0,
+    has_expires: 1,
+    samesite: 2,
+  };
+  const cookie = toPlaywrightCookie(row, "abc123");
+  assert.equal(cookie.name, "session");
+  assert.equal(cookie.value, "abc123");
+  assert.equal(cookie.domain, ".example.com");
+  assert.equal(cookie.path, "/app");
+  assert.equal(cookie.secure, true);
+  assert.equal(cookie.httpOnly, false);
+  assert.equal(cookie.sameSite, "Strict");
+  assert.equal(typeof cookie.expires, "number");
 });

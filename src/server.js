@@ -5,6 +5,13 @@ import { BrowserManager } from "./browser-manager.js";
 import { resolveConfig, writeState, clearState } from "./config.js";
 import { getDisplayStrategy } from "./display-strategy.js";
 import { handleCookiePickerRoute } from "./cookie-picker-routes.js";
+import {
+  parseBody,
+  sendJson,
+  badRequest,
+  unauthorized,
+  getAuthToken,
+} from "./http-helpers.js";
 
 const config = resolveConfig();
 const strategy = getDisplayStrategy({ mode: config.mode });
@@ -17,38 +24,6 @@ if (strategy.error) {
 const token = crypto.randomUUID();
 const manager = new BrowserManager(strategy);
 let isShuttingDown = false;
-
-function unauthorized(res) {
-  res.writeHead(401, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "Unauthorized" }));
-}
-
-function badRequest(res, msg) {
-  res.writeHead(400, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: msg }));
-}
-
-function parseBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (c) => chunks.push(c));
-    req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        resolve(raw.length === 0 ? {} : JSON.parse(raw));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-function getAuthToken(req) {
-  const auth = req.headers.authorization || "";
-  if (!auth.startsWith("Bearer ")) return "";
-  return auth.slice("Bearer ".length);
-}
 
 async function start() {
   await manager.launch();
@@ -63,20 +38,16 @@ async function start() {
 
     if (url.pathname === "/health" && req.method === "GET") {
       const status = manager.getStatus();
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({
-          status: "healthy",
-          mode: config.mode,
-          strategy: strategy.mode,
-          currentUrl: status.url,
-          pageAvailable: status.pageAvailable,
-          pageClosed: status.pageClosed,
-          contextClosed: status.contextClosed,
-          browserConnected: status.browserConnected,
-        }),
-      );
-      return;
+      return sendJson(res, 200, {
+        status: "healthy",
+        mode: config.mode,
+        strategy: strategy.mode,
+        currentUrl: status.url,
+        pageAvailable: status.pageAvailable,
+        pageClosed: status.pageClosed,
+        contextClosed: status.contextClosed,
+        browserConnected: status.browserConnected,
+      });
     }
 
     if (url.pathname === "/command" && req.method === "POST") {
@@ -94,17 +65,14 @@ async function start() {
 
       try {
         const output = await manager.exec(command, args);
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true, output }));
+        return sendJson(res, 200, { ok: true, output });
       } catch (err) {
-        res.writeHead(500, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+        console.error("Command error:", err);
+        return sendJson(res, 500, { ok: false, error: "Command failed" });
       }
-      return;
     }
 
-    res.writeHead(404, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Not found" }));
+    sendJson(res, 404, { error: "Not found" });
   });
 
   server.listen(0, config.host, () => {
@@ -133,13 +101,27 @@ async function start() {
     }
   };
 
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
-  process.on("uncaughtException", async () => {
-    await shutdown();
+  process.on("SIGTERM", () => {
+    shutdown().catch((err) => {
+      console.error("Shutdown error (SIGTERM):", err);
+    });
   });
-  process.on("unhandledRejection", async () => {
-    await shutdown();
+  process.on("SIGINT", () => {
+    shutdown().catch((err) => {
+      console.error("Shutdown error (SIGINT):", err);
+    });
+  });
+  process.on("uncaughtException", async (err) => {
+    console.error("Uncaught exception:", err);
+    await shutdown().catch((shutdownErr) => {
+      console.error("Shutdown error after uncaughtException:", shutdownErr);
+    });
+  });
+  process.on("unhandledRejection", async (reason) => {
+    console.error("Unhandled rejection:", reason);
+    await shutdown().catch((shutdownErr) => {
+      console.error("Shutdown error after unhandledRejection:", shutdownErr);
+    });
   });
 }
 

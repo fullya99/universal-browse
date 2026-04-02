@@ -14,15 +14,29 @@
     "start": "node src/server.js",
     "unibrowse": "node src/cli.js",
     "test": "node --test",
+    "lint": "eslint .",
+    "test:coverage": "c8 --lines 30 --branches 60 --check-coverage node --test",
     "preflight": "node scripts/preflight.js",
     "install:claude:project": "node scripts/install-claude-skill.js --scope project --force",
     "install:claude:personal": "node scripts/install-claude-skill.js --scope personal --force",
     "setup:linux": "bash scripts/setup-linux.sh",
     "setup:macos": "bash scripts/setup-macos.sh",
-    "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1"
+    "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1",
+    "prepare": "husky"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
-    "playwright": "^1.58.2"
+    "better-sqlite3": "11.7.0",
+    "playwright": "1.58.2"
+  },
+  "lint-staged": {
+    "*.js": "eslint --fix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "c8": "^11.0.0",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
   }
 }

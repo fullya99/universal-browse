@@ -197,7 +197,7 @@ function formatA11y(node, depth = 0, lines = []) {
   if (!node) return lines;
   const indent = "  ".repeat(depth);
   const role = node.role || "node";
-  const name = node.name ? ` \"${node.name}\"` : "";
+  const name = node.name ? ` "${node.name}"` : "";
   lines.push(`${indent}[${role}]${name}`);
   if (Array.isArray(node.children)) {
     for (const child of node.children) formatA11y(child, depth + 1, lines);
@@ -512,6 +512,15 @@ export class BrowserManager {
       case "goto": {
         const url = args[0];
         if (!url) throw new Error("Usage: goto <url>");
+        let parsed;
+        try {
+          parsed = new URL(url);
+        } catch {
+          throw new Error("Invalid URL");
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          throw new Error("Only http and https URLs are supported");
+        }
         await this.page.goto(url, { waitUntil: "domcontentloaded" });
         this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
         let challenge = await inspectChallenge(this.page);

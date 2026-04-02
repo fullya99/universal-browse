@@ -3,3 +3,7 @@ node_modules/
 *.log
 coverage/
 .DS_Store
+.claude/
+CLAUDE.md
+*-REPORT.md
+SKILL_CROSS_PLATFORM_TEST_PROTOCOL.md

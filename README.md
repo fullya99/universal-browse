@@ -243,6 +243,17 @@ Environment toggles:
 - Optional strict mode: set `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` to require `--allow-plaintext-cookies` on `cookie-import`
 - No remote control channel exposed by default
 
+### Chromium cookie encryption
+
+The cookie import engine decrypts Chromium-format cookies using platform-specific key derivation:
+
+- **macOS:** PBKDF2-SHA1 with 1003 iterations, password from Keychain (`Chrome Safe Storage` / per-browser service name), salt `saltysalt`, producing a 16-byte AES-128-CBC key.
+- **Linux v10:** Same PBKDF2-SHA1 scheme with password `peanuts` and 1 iteration (hardcoded Chromium default).
+- **Linux v11:** PBKDF2-SHA1 with 1 iteration, password from `secret-tool` (GNOME keyring), same salt.
+- **Windows:** AES-256-GCM with a 32-byte master key stored in `Local State`, itself encrypted via DPAPI (`ProtectedData.Unprotect`). Newer Chrome versions use App-Bound Encryption (ABE) which is explicitly detected and rejected with `abe_unsupported`.
+
+These are implementation details of Chromium's `os_crypt` module and may change across browser versions. The `launch-with-profile` command sidesteps decryption entirely by reusing the real browser binary and profile directory.
+
 ## Command reference
 
 ```text
@@ -320,6 +331,14 @@ Constraints:
 - no destructive git commands
 - keep changes local to this project only
 ```
+
+## Architecture decisions
+
+**HTTP over Unix sockets:** The daemon uses a plain HTTP server on `127.0.0.1` with a random port rather than a Unix domain socket. This ensures Windows compatibility without platform-specific transport code, and simplifies debugging since any HTTP client can interact with the daemon.
+
+**No TypeScript:** The project uses plain ESM JavaScript with JSDoc annotations where needed. This avoids a build step, keeps the dependency footprint minimal, and makes the code directly executable with `node` on any platform. The tradeoff is accepted: the codebase is small enough that type safety at the compiler level is not required.
+
+**Test automation scope:** Tests cover unit logic (crypto, helpers, config) and lightweight HTTP routing via mock managers. Full browser integration tests (Playwright launch + navigation) are intentionally excluded from CI to avoid flaky headless Chromium issues across platforms. The smoke flow (`status -> goto -> snapshot -> stop`) is validated manually or via the preflight script.
 
 ## Development
 
