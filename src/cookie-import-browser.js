@@ -25,6 +25,7 @@ const BROWSER_REGISTRY = [
     aliases: ["chrome", "google-chrome", "google-chrome-stable"],
     linuxDataDir: "google-chrome/",
     linuxApplication: "chrome",
+    windowsDataDir: "Google/Chrome/User Data/",
   },
   {
     name: "Chromium",
@@ -33,6 +34,7 @@ const BROWSER_REGISTRY = [
     aliases: ["chromium"],
     linuxDataDir: "chromium/",
     linuxApplication: "chromium",
+    windowsDataDir: "Chromium/User Data/",
   },
   { name: "Arc", dataDir: "Arc/User Data/", keychainService: "Arc Safe Storage", aliases: ["arc"] },
   {
@@ -42,6 +44,7 @@ const BROWSER_REGISTRY = [
     aliases: ["brave"],
     linuxDataDir: "BraveSoftware/Brave-Browser/",
     linuxApplication: "brave",
+    windowsDataDir: "BraveSoftware/Brave-Browser/User Data/",
   },
   {
     name: "Edge",
@@ -50,6 +53,7 @@ const BROWSER_REGISTRY = [
     aliases: ["edge"],
     linuxDataDir: "microsoft-edge/",
     linuxApplication: "microsoft-edge",
+    windowsDataDir: "Microsoft/Edge/User Data/",
   },
 ];
 
@@ -74,7 +78,9 @@ async function getSqliteModule() {
 }
 
 function getHostPlatform() {
-  if (process.platform === "darwin" || process.platform === "linux") return process.platform;
+  if (process.platform === "darwin" || process.platform === "linux" || process.platform === "win32") {
+    return process.platform;
+  }
   return null;
 }
 
@@ -82,18 +88,28 @@ function getSearchPlatforms() {
   const current = getHostPlatform();
   const order = [];
   if (current) order.push(current);
-  for (const p of ["darwin", "linux"]) {
+  for (const p of ["darwin", "linux", "win32"]) {
     if (!order.includes(p)) order.push(p);
   }
   return order;
 }
 
 function getDataDirForPlatform(browser, platform) {
-  return platform === "darwin" ? browser.dataDir : browser.linuxDataDir || null;
+  if (platform === "darwin") return browser.dataDir;
+  if (platform === "linux") return browser.linuxDataDir || null;
+  if (platform === "win32") return browser.windowsDataDir || null;
+  return null;
 }
 
 function getBaseDir(platform) {
   if (platform === "darwin") return path.join(os.homedir(), "Library", "Application Support");
+  if (platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    const appData = process.env.APPDATA;
+    if (localAppData && localAppData.length > 0) return localAppData;
+    if (appData && appData.length > 0) return appData;
+    return path.join(os.homedir(), "AppData", "Local");
+  }
   return path.join(os.homedir(), ".config");
 }
 
@@ -164,7 +180,7 @@ async function openDb(dbPath, browserName) {
 
 async function openDbFromCopy(dbPath, browserName) {
   const Sqlite = await getSqliteModule();
-  const tmpPath = `/tmp/universal-browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`;
+  const tmpPath = path.join(os.tmpdir(), `universal-browse-cookies-${browserName.toLowerCase()}-${crypto.randomUUID()}.db`);
   try {
     fs.copyFileSync(dbPath, tmpPath);
     const walPath = `${dbPath}-wal`;
@@ -222,11 +238,24 @@ async function runCmd(cmd, args, timeoutMs) {
   } catch (err) {
     const stdout = typeof err?.stdout === "string" ? err.stdout : "";
     const stderr = typeof err?.stderr === "string" ? err.stderr : "";
-    if (err?.killed || err?.signal === "SIGTERM") {
+    if (err?.killed || err?.signal === "SIGTERM" || err?.signal === "SIGKILL") {
       return { ok: false, timeout: true, stdout, stderr };
     }
     return { ok: false, stdout, stderr, code: err?.code, message: err?.message };
   }
+}
+
+async function runPowerShell(script, timeoutMs = 10000) {
+  const commands = process.platform === "win32"
+    ? ["powershell.exe", "powershell", "pwsh.exe", "pwsh"]
+    : ["powershell", "pwsh"];
+  let last = null;
+  for (const cmd of commands) {
+    const out = await runCmd(cmd, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], timeoutMs);
+    if (out.ok) return out;
+    last = out;
+  }
+  return last || { ok: false, message: "PowerShell unavailable" };
 }
 
 async function getMacKeychainPassword(service) {
@@ -274,7 +303,74 @@ async function getLinuxSecretPassword(browser) {
   return null;
 }
 
+function getLocalStatePath(match) {
+  const dataDir = getDataDirForPlatform(match.browser, match.platform);
+  if (!dataDir) {
+    throw new CookieImportError(`No data directory mapping for ${match.browser.name} on ${match.platform}`, "not_supported");
+  }
+  return path.join(getBaseDir(match.platform), dataDir, "Local State");
+}
+
+async function dpapiUnprotectBase64(base64Input) {
+  const escaped = JSON.stringify(base64Input);
+  const script = [
+    `$inB64 = ${escaped}`,
+    "$bytes = [Convert]::FromBase64String($inB64)",
+    "$out = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)",
+    "[Convert]::ToBase64String($out)",
+  ].join("; ");
+  const out = await runPowerShell(script, 12000);
+  if (!out?.ok || !out.stdout || out.stdout.trim().length === 0) {
+    throw new CookieImportError(
+      `Could not decrypt Windows protected data: ${out?.stderr || out?.message || "unknown error"}`,
+      "dpapi_error",
+      "retry",
+    );
+  }
+  return out.stdout.trim();
+}
+
+async function getWindowsMasterKey(match) {
+  const localStatePath = getLocalStatePath(match);
+  if (!fs.existsSync(localStatePath)) {
+    throw new CookieImportError(`Missing Local State file: ${localStatePath}`, "not_installed");
+  }
+
+  let localState;
+  try {
+    localState = JSON.parse(fs.readFileSync(localStatePath, "utf8"));
+  } catch {
+    throw new CookieImportError(`Invalid Local State JSON: ${localStatePath}`, "bad_state");
+  }
+
+  const encryptedKeyB64 = localState?.os_crypt?.encrypted_key;
+  if (!encryptedKeyB64 || typeof encryptedKeyB64 !== "string") {
+    throw new CookieImportError("Missing os_crypt.encrypted_key in Local State", "key_missing");
+  }
+
+  const encryptedWithPrefix = Buffer.from(encryptedKeyB64, "base64");
+  if (encryptedWithPrefix.length <= 5) {
+    throw new CookieImportError("Invalid encrypted_key in Local State", "key_invalid");
+  }
+  const encrypted = encryptedWithPrefix.slice(0, 5).toString("utf8") === "DPAPI"
+    ? encryptedWithPrefix.slice(5)
+    : encryptedWithPrefix;
+  const decryptedB64 = await dpapiUnprotectBase64(encrypted.toString("base64"));
+  const masterKey = Buffer.from(decryptedB64, "base64");
+  if (masterKey.length !== 32) {
+    throw new CookieImportError(
+      `Invalid Windows master key length: ${masterKey.length}`,
+      "key_invalid",
+    );
+  }
+  return masterKey;
+}
+
 async function getDerivedKeys(match) {
+  if (match.platform === "win32") {
+    const masterKey = await getWindowsMasterKey(match);
+    return new Map([["win-master", masterKey]]);
+  }
   if (match.platform === "darwin") {
     const password = await getMacKeychainPassword(match.browser.keychainService);
     return new Map([
@@ -314,12 +410,29 @@ function mapSameSite(value) {
   }
 }
 
-function decryptCookieValue(row, keys) {
+async function decryptCookieValue(row, keys) {
   if (row.value && row.value.length > 0) return row.value;
   const ev = Buffer.isBuffer(row.encrypted_value)
     ? row.encrypted_value
     : Buffer.from(row.encrypted_value || []);
   if (ev.length === 0) return "";
+
+  const winMaster = keys.get("win-master");
+  if (winMaster) {
+    const winPrefix = ev.slice(0, 3).toString("utf8");
+    if ((winPrefix === "v10" || winPrefix === "v11" || winPrefix === "v20") && ev.length > 31) {
+      const nonce = ev.slice(3, 15);
+      const encrypted = ev.slice(15);
+      const ciphertext = encrypted.slice(0, -16);
+      const authTag = encrypted.slice(-16);
+      const decipher = crypto.createDecipheriv("aes-256-gcm", winMaster, nonce);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+    }
+    const decryptedB64 = await dpapiUnprotectBase64(ev.toString("base64"));
+    return Buffer.from(decryptedB64, "base64").toString("utf8");
+  }
+
   const prefix = ev.slice(0, 3).toString("utf8");
   const key = keys.get(prefix);
   if (!key) throw new Error(`No key for ${prefix}`);
@@ -469,7 +582,7 @@ export async function importCookies(browserName, domains, profile = "Default") {
     const domainCounts = {};
     for (const row of rows) {
       try {
-        const value = decryptCookieValue(row, keys);
+        const value = await decryptCookieValue(row, keys);
         const cookie = toPlaywrightCookie(row, value);
         cookies.push(cookie);
         domainCounts[row.host_key] = (domainCounts[row.host_key] || 0) + 1;

@@ -1,7 +1,7 @@
 {
   "name": "universal-browse",
   "version": "1.0.0",
-  "description": "Universal Playwright browser daemon for Linux/macOS and VPS workflows.",
+  "description": "Universal Playwright browser daemon for Linux/macOS/Windows and VPS workflows.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -15,7 +15,8 @@
     "test": "node --test",
     "preflight": "node scripts/preflight.js",
     "setup:linux": "bash scripts/setup-linux.sh",
-    "setup:macos": "bash scripts/setup-macos.sh"
+    "setup:macos": "bash scripts/setup-macos.sh",
+    "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

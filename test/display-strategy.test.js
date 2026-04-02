@@ -21,3 +21,13 @@ test("headed mode with display is native", () => {
   assert.equal(result.mode, "headed-native");
   assert.equal(result.wrapWithXvfb, false);
 });
+
+test("headed mode on windows is native", () => {
+  const result = getDisplayStrategy({
+    platform: "win32",
+    mode: "headed",
+    env: {},
+  });
+  assert.equal(result.mode, "headed-native");
+  assert.equal(result.wrapWithXvfb, false);
+});

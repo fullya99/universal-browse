@@ -1,8 +1,8 @@
 ---
 name: universal-browse
-description: Universal browser QA and dogfooding workflow using a persistent Playwright daemon with Linux/macOS and VPS support. Use when asked to open a URL, test a user flow, verify UI behavior, collect screenshots, or debug browser console/network issues.
+description: Universal browser QA and dogfooding workflow using a persistent Playwright daemon with Linux/macOS/Windows and VPS support. Use when asked to open a URL, test a user flow, verify UI behavior, collect screenshots, or debug browser console/network issues.
 license: MIT
-compatibility: Works on Linux and macOS, including Linux VPS/headless environments. Optional virtual display support via Xvfb for headed sessions on servers without a physical display.
+compatibility: Works on Linux, macOS, and Windows, including Linux VPS/headless environments. Optional virtual display support via Xvfb for headed sessions on servers without a physical display.
 metadata:
   owner: universal-browse
   version: 1.0.0
@@ -58,6 +58,7 @@ npx unibrowse cookie-import-browser chrome
 See details:
 - `references/linux-vps.md`
 - `references/macos.md`
+- `references/windows.md`
 - `references/troubleshooting.md`
 
 ## Handoff protocol

@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import {
@@ -12,6 +13,13 @@ function truncate(text, max = 12000) {
   if (typeof text !== "string") return "";
   if (text.length <= max) return text;
   return `${text.slice(0, max)}\n... [truncated]`;
+}
+
+function isPathWithin(baseDir, targetPath) {
+  const base = path.resolve(baseDir);
+  const target = path.resolve(targetPath);
+  const relative = path.relative(base, target);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function formatA11y(node, depth = 0, lines = []) {
@@ -142,7 +150,7 @@ export class BrowserManager {
         return `OK: viewport ${raw}`;
       }
       case "screenshot": {
-        const outPath = args[0] || `/tmp/universal-browse-${Date.now()}.png`;
+        const outPath = args[0] || path.join(os.tmpdir(), `universal-browse-${Date.now()}.png`);
         await this.page.screenshot({ path: outPath, fullPage: true });
         return `OK: screenshot ${outPath}`;
       }
@@ -152,8 +160,8 @@ export class BrowserManager {
         const filePath = args[0];
         if (!filePath) throw new Error("Usage: cookie-import <json-file>");
         const resolved = path.resolve(filePath);
-        const safeDirs = ["/tmp", process.cwd()];
-        const isSafe = safeDirs.some((dir) => resolved.startsWith(path.resolve(dir)));
+        const safeDirs = [os.tmpdir(), process.cwd()];
+        const isSafe = safeDirs.some((dir) => isPathWithin(dir, resolved));
         if (!isSafe) throw new Error(`Path must be within: ${safeDirs.join(", ")}`);
         if (!fs.existsSync(resolved)) throw new Error(`File not found: ${resolved}`);
         const raw = fs.readFileSync(resolved, "utf8");
@@ -195,10 +203,14 @@ export class BrowserManager {
         }
         if (!this.serverPort) throw new Error("Server port not available");
         const pickerUrl = `http://127.0.0.1:${this.serverPort}/cookie-picker`;
-
-        const opener = process.platform === "darwin" ? "open" : "xdg-open";
         try {
-          const child = spawn(opener, [pickerUrl], { detached: true, stdio: "ignore" });
+          const openSpec =
+            process.platform === "darwin"
+              ? { command: "open", args: [pickerUrl] }
+              : process.platform === "win32"
+                ? { command: "cmd", args: ["/c", "start", "", pickerUrl] }
+                : { command: "xdg-open", args: [pickerUrl] };
+          const child = spawn(openSpec.command, openSpec.args, { detached: true, stdio: "ignore" });
           child.unref();
         } catch {}
 

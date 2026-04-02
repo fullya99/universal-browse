@@ -29,5 +29,8 @@ npx unibrowse status
   - approve the Keychain prompt for the browser safe storage entry.
 - Linux `v11` decryption fails:
   - ensure `secret-tool` is installed and keyring is unlocked.
+- Windows DPAPI decryption fails:
+  - ensure you run from the same Windows user account that owns the browser profile.
+  - verify PowerShell is available (`powershell -Command "$PSVersionTable.PSVersion"` or `pwsh -Command "$PSVersionTable.PSVersion"`).
 - `db_locked`:
   - close the browser fully, then retry import.

@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 
 function hasProgram(name) {
-  const r = spawnSync("which", [name], {
+  const lookupCmd = process.platform === "win32" ? "where" : "which";
+  const r = spawnSync(lookupCmd, [name], {
     stdio: ["ignore", "ignore", "ignore"],
     timeout: 1000,
   });

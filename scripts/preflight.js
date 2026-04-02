@@ -15,11 +15,16 @@ function checkOptional(label, ok, info = "") {
 }
 
 function hasProgram(name) {
-  const r = spawnSync("which", [name], {
+  const lookupCmd = process.platform === "win32" ? "where" : "which";
+  const r = spawnSync(lookupCmd, [name], {
     stdio: ["ignore", "ignore", "ignore"],
     timeout: 1000,
   });
   return r.status === 0;
+}
+
+function hasAnyProgram(names) {
+  return names.some((name) => hasProgram(name));
 }
 
 function nodeMajor() {
@@ -43,6 +48,14 @@ if (platform === "linux") {
 
 if (platform === "darwin") {
   checkOptional("security CLI available", hasProgram("security"), "needed for macOS keychain cookie decryption");
+}
+
+if (platform === "win32") {
+  checkOptional(
+    "PowerShell available",
+    hasAnyProgram(["powershell", "powershell.exe", "pwsh", "pwsh.exe"]),
+    "needed for Windows DPAPI cookie decryption",
+  );
 }
 
 if (!okAll) {

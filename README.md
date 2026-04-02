@@ -3,7 +3,7 @@
 [![Node 20+](https://img.shields.io/badge/node-20%2B-2f7d32?style=flat-square)](https://nodejs.org)
 [![Playwright 1.58+](https://img.shields.io/badge/playwright-1.58%2B-2e8b57?style=flat-square)](https://playwright.dev)
 [![CI](https://github.com/fullya99/universal-browse/actions/workflows/ci.yml/badge.svg)](https://github.com/fullya99/universal-browse/actions/workflows/ci.yml)
-[![OS Support](https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20VPS-0f766e?style=flat-square)](#compatibility)
+[![OS Support](https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20windows%20%7C%20VPS-0f766e?style=flat-square)](#compatibility)
 [![Headless + Headed](https://img.shields.io/badge/mode-headless%20%2B%20headed-1d4ed8?style=flat-square)](#how-it-works)
 [![License MIT](https://img.shields.io/badge/license-MIT-111827?style=flat-square)](./LICENSE)
 
@@ -15,6 +15,7 @@ Universal, persistent browser runtime for AI coding workflows.
 - Linux VPS and CI agents
 - Linux servers with no display (auto Xvfb path for headed mode)
 - macOS
+- Windows
 
 It also includes a complete Chromium cookie importer suite (JSON import, browser-profile import, and interactive picker UI), ported for long-term Node compatibility.
 
@@ -37,12 +38,12 @@ Most browser automation tools are either:
 
 - Persistent daemon with token-protected command endpoint on `127.0.0.1`
 - Fast CLI command model (`goto`, `snapshot`, `fill`, `click`, `screenshot`, etc.)
-- Linux/macOS display strategy detection (`headless-native`, `headed-native`, `headed-xvfb`)
+- Linux/macOS/Windows display strategy detection (`headless-native`, `headed-native`, `headed-xvfb`)
 - Full cookie importer:
   - `cookie-import <json-file>`
   - `cookie-import-browser <browser> --domain <domain> [--profile <profile>]`
   - interactive picker at `/cookie-picker`
-- Decryption support for Chromium-style cookies (`v10` and Linux `v11` when secret service is available)
+- Decryption support for Chromium-style cookies (macOS `v10`, Linux `v10`/`v11`, Windows DPAPI + AES-GCM)
 
 ## Quickstart
 
@@ -50,6 +51,12 @@ Most browser automation tools are either:
 npm install
 npx playwright install --with-deps chromium
 npm run preflight
+```
+
+On Windows, use:
+
+```powershell
+npm run setup:windows
 ```
 
 Basic flow:
@@ -118,6 +125,7 @@ This gives stable behavior for long multi-step sessions where browser state matt
 - **Linux VPS/CI:** headless default
 - **Linux VPS headed:** auto uses `xvfb-run` when available
 - **macOS:** headed and headless
+- **Windows:** headed and headless
 
 Environment toggles:
 
@@ -132,6 +140,7 @@ The browser importer reads Chromium profile cookie DBs and converts them into Pl
 - Profile discovery: `Default` and `Profile N`
 - Domain-scoped import for precise session transfer
 - macOS keychain integration (`security`) and Linux secret service integration (`secret-tool`)
+- Windows DPAPI + Chromium `Local State` master-key decryption
 - Safe fallback for locked DBs by reading from temporary copied SQLite DB files
 
 ## Security model
