@@ -1,0 +1,133 @@
+{
+  "skill_name": "universal-browse",
+  "evals": [
+    {
+      "id": 1,
+      "name": "should-trigger-open-url",
+      "prompt": "Open https://staging.example.com and check if it loads",
+      "expected_output": "Skill triggers, runs goto + snapshot",
+      "should_trigger": true,
+      "assertions": ["Uses unibrowse goto", "Returns page content or snapshot"]
+    },
+    {
+      "id": 2,
+      "name": "should-trigger-screenshot",
+      "prompt": "Take a screenshot of the homepage",
+      "expected_output": "Skill triggers, runs screenshot command",
+      "should_trigger": true,
+      "assertions": ["Uses unibrowse screenshot", "Saves file to disk"]
+    },
+    {
+      "id": 3,
+      "name": "should-trigger-qa-deploy",
+      "prompt": "QA the staging deploy and verify the login page works",
+      "expected_output": "Skill triggers, navigates and interacts",
+      "should_trigger": true,
+      "assertions": ["Uses goto", "Uses snapshot or text", "Reports pass/fail"]
+    },
+    {
+      "id": 4,
+      "name": "should-trigger-smoke-test",
+      "prompt": "Run a smoke test on our production site",
+      "expected_output": "Skill triggers, runs basic navigation",
+      "should_trigger": true,
+      "assertions": ["Uses unibrowse goto", "Collects evidence"]
+    },
+    {
+      "id": 5,
+      "name": "should-trigger-check-console",
+      "prompt": "Check if there are any JS errors on the dashboard page",
+      "expected_output": "Skill triggers, navigates and checks console",
+      "should_trigger": true,
+      "assertions": ["Uses goto", "Uses console command"]
+    },
+    {
+      "id": 6,
+      "name": "should-trigger-mobile-check",
+      "prompt": "Does the landing page look ok on mobile?",
+      "expected_output": "Skill triggers with viewport + screenshot",
+      "should_trigger": true,
+      "assertions": ["Sets mobile viewport", "Takes screenshot or snapshot"]
+    },
+    {
+      "id": 7,
+      "name": "should-trigger-network-debug",
+      "prompt": "The API calls on the settings page seem slow, can you check?",
+      "expected_output": "Skill triggers, uses network command",
+      "should_trigger": true,
+      "assertions": ["Uses goto", "Uses network command"]
+    },
+    {
+      "id": 8,
+      "name": "should-trigger-dogfood",
+      "prompt": "Dogfood the new feature on staging before we ship",
+      "expected_output": "Skill triggers for QA workflow",
+      "should_trigger": true,
+      "assertions": ["Navigates to URL", "Tests user flow"]
+    },
+    {
+      "id": 9,
+      "name": "should-NOT-trigger-unit-tests",
+      "prompt": "Run the unit tests for the auth module",
+      "expected_output": "Skill does NOT trigger, this is about code tests not browser testing",
+      "should_trigger": false,
+      "assertions": ["Does not use unibrowse", "Runs npm test or similar"]
+    },
+    {
+      "id": 10,
+      "name": "should-NOT-trigger-api-curl",
+      "prompt": "Call the /api/users endpoint and check the response",
+      "expected_output": "Skill does NOT trigger, this is an API call not a browser flow",
+      "should_trigger": false,
+      "assertions": ["Uses curl or fetch, not browser"]
+    },
+    {
+      "id": 11,
+      "name": "should-NOT-trigger-css-edit",
+      "prompt": "Change the button color to blue in the CSS file",
+      "expected_output": "Skill does NOT trigger, this is a code edit",
+      "should_trigger": false,
+      "assertions": ["Edits CSS file directly"]
+    },
+    {
+      "id": 12,
+      "name": "should-NOT-trigger-git-ops",
+      "prompt": "Push the changes and create a PR",
+      "expected_output": "Skill does NOT trigger, this is git workflow",
+      "should_trigger": false,
+      "assertions": ["Uses git commands, not browser"]
+    },
+    {
+      "id": 13,
+      "name": "should-NOT-trigger-docker",
+      "prompt": "Build the Docker image and check it starts correctly",
+      "expected_output": "Skill does NOT trigger, this is container ops",
+      "should_trigger": false,
+      "assertions": ["Uses docker commands"]
+    },
+    {
+      "id": 14,
+      "name": "should-NOT-trigger-database",
+      "prompt": "Check the database schema and run migrations",
+      "expected_output": "Skill does NOT trigger, this is database ops",
+      "should_trigger": false,
+      "assertions": ["Uses database tools, not browser"]
+    },
+    {
+      "id": 15,
+      "name": "should-NOT-trigger-read-file",
+      "prompt": "Read the config file and explain what each setting does",
+      "expected_output": "Skill does NOT trigger, file reading not browsing",
+      "should_trigger": false,
+      "assertions": ["Reads local file, no browser involved"]
+    },
+    {
+      "id": 16,
+      "name": "should-NOT-trigger-perf-benchmark",
+      "prompt": "Benchmark the sorting algorithm performance",
+      "expected_output": "Skill does NOT trigger, code benchmark not browser",
+      "should_trigger": false,
+      "assertions": ["Runs code benchmark, not browser test"]
+    }
+  ]
+}

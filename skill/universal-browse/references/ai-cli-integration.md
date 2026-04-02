@@ -205,6 +205,9 @@ npm run install:claude:project
 npm run install:claude:personal
 ```
 
+This copies the full skill directory (SKILL.md + references/) to the target scope.
+Verify with: `ls ~/.claude/skills/universal-browse/references/`
+
 - Plugin workflow is not supported for installation in this repository. Use standalone native installers only.
 
 ### Codex CLI

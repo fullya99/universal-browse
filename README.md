@@ -7,181 +7,129 @@
 [![Headless + Headed](https://img.shields.io/badge/mode-headless%20%2B%20headed-1d4ed8?style=flat-square)](#how-it-works)
 [![License MIT](https://img.shields.io/badge/license-MIT-111827?style=flat-square)](./LICENSE)
 
-Universal, persistent browser runtime for AI coding workflows.
+Persistent browser daemon and CLI for AI-assisted QA, dogfooding, and web automation.
 
-`universal-browse` gives you a fast local browser daemon and a thin CLI (`unibrowse`) that feels instant after startup. It is built for real engineering environments, not just local laptops:
+One `npm ci` and you get a local Playwright daemon (`unibrowse`) that stays alive across commands, works on Linux/macOS/Windows/VPS, and handles cookie import and browser profile reuse out of the box.
 
-- Linux dev machines
-- Linux VPS and CI agents
-- Linux servers with no display (auto Xvfb path for headed mode)
-- macOS
-- Windows
-
-It includes practical session transfer paths for real-world use (JSON cookie import + native browser profile launch), ported for long-term Node compatibility.
-
-## Why this project exists
-
-Most browser automation tools are either:
-
-- great in tests but awkward in agent loops, or
-- fast in one environment but brittle across VPS/macOS/Linux display setups.
-
-`universal-browse` is designed as an operational layer for autonomous and semi-autonomous workflows:
-
-- persistent session state
-- small command surface for agents
-- local-only control plane with bearer auth
-- explicit handling of Linux display realities
-- practical browser-cookie bridge for authenticated testing and debugging
-
-## Core capabilities
-
-- Persistent daemon with token-protected command endpoint on `127.0.0.1`
-- Fast CLI command model (`goto`, `snapshot`, `fill`, `click`, `screenshot`, etc.)
-- Linux/macOS/Windows display strategy detection (`headless-native`, `headed-native`, `headed-xvfb`)
-- Full cookie importer:
-  - `cookie-import <json-file>`
-  - `launch-with-profile <chrome|brave|edge> [--profile <name>]`
-- Decryption support for Chromium-style cookies (macOS `v10`, Linux `v10`/`v11`, Windows DPAPI + AES-GCM with explicit App-Bound Encryption detection)
-
-## Quickstart
+## Install
 
 ```bash
+git clone https://github.com/fullya99/universal-browse.git
+cd universal-browse
 npm ci
-npx playwright install --with-deps chromium
-npm run preflight
+npx playwright install --with-deps chromium   # Linux (installs system deps)
+npx playwright install chromium                # macOS / Windows
+npm run preflight                              # verify everything is ready
 ```
 
-On Windows, also run:
-
-```powershell
-npm run setup:windows
-```
-
-On macOS, optional bootstrap:
+Optional OS-specific bootstraps:
 
 ```bash
-npm run setup:macos
+npm run setup:linux     # Xvfb + system deps
+npm run setup:macos     # Keychain prompts
+npm run setup:windows   # PowerShell DPAPI setup
 ```
 
-On Linux, optional bootstrap:
+## Quick start
 
 ```bash
-npm run setup:linux
+npm run unibrowse -- status                          # start daemon
+npm run unibrowse -- goto https://example.com        # navigate
+npm run unibrowse -- snapshot                        # accessibility tree
+npm run unibrowse -- screenshot /tmp/proof.png       # save screenshot
+npm run unibrowse -- stop                            # stop daemon
 ```
 
-Basic flow:
+The daemon persists between commands. No need to relaunch between navigations.
 
-```bash
-npm run unibrowse -- goto https://example.com
-npm run unibrowse -- snapshot
-npm run unibrowse -- screenshot
+## Command reference
+
+```text
+status                                        # start daemon / check health
+stop                                          # stop daemon
+goto <url>                                    # navigate (http/https only)
+text                                          # page text content
+snapshot                                      # accessibility tree
+click <selector>                              # click element
+fill <selector> <value>                       # fill input
+wait <ms>                                     # wait N milliseconds
+scroll <up|down> <pixels>                     # scroll page
+eval <js expression>                          # evaluate JS in page
+viewport <w>x<h>                              # set viewport size
+screenshot [path]                             # save screenshot
+console                                       # browser console logs
+network                                       # network activity log
+cookies                                       # list cookies (values redacted)
+cookie-import <json-file>                     # import cookies from JSON
+cookie-import <json-file> --allow-plaintext-cookies
+launch-with-profile <chrome|brave|edge> [--profile name]
 ```
 
-Cookie flow:
+## Cookie import and session transfer
+
+Import cookies from a JSON file for authenticated browsing:
 
 ```bash
 npm run unibrowse -- cookie-import /tmp/cookies.json
+```
+
+Or relaunch with a real browser profile (bypasses cookie decryption entirely):
+
+```bash
 npm run unibrowse -- launch-with-profile brave --profile Default
 ```
 
-## AI-assisted installation protocol
+The cookie engine decrypts Chromium-format cookies per platform:
 
-If your users run AI agents in terminal tools (Claude Code, Codex CLI, OpenCode, Gemini CLI wrappers, etc.), give them a single prompt that installs, validates, and smoke-tests `universal-browse` in one run.
+| Platform | Method |
+|----------|--------|
+| macOS | PBKDF2-SHA1 + Keychain (`Chrome Safe Storage`) |
+| Linux v10 | PBKDF2-SHA1, hardcoded password `peanuts` |
+| Linux v11 | PBKDF2-SHA1 + `secret-tool` (GNOME keyring) |
+| Windows | AES-256-GCM + DPAPI master key from `Local State` |
 
-For a complete adapter playbook (CLI + IDE), see `skill/universal-browse/references/ai-cli-integration.md`.
+Windows App-Bound Encryption (ABE) is detected and rejected with `abe_unsupported` — use `launch-with-profile` or JSON import as fallback.
 
-### Copy-paste prompt (universal)
+## AI CLI integration
 
-```text
-You are in the root of the universal-browse repository.
+### Claude Code (recommended)
 
-Use this helper as the source of truth:
-- skill/universal-browse/references/ai-cli-integration.md
-
-First, run section "3) Universal bootstrap prompt (for any AI CLI)".
-Important: make the process interactive by asking the user choices before setup (tool, scope, native install mode, fallback behavior) as defined in section "3".
-
-Then run section "5) Install and validate runtime", and finish with sections "7" and "8".
-
-Important:
-- Do not report full success unless both statuses pass:
-  - `READY-RUNTIME`
-  - `READY-NATIVE-SKILL`
-
-Constraints:
-- do not commit or push
-- do not modify source files
-- stop on destructive actions
-- show each command before running it
-
-Output format:
-- PASS or FAIL
-- OS + Node + npm versions
-- command-by-command status
-- exact failing output if any
-- next actions if failed
-- selected user choices (tool/scope/native mode)
-- final status split:
-  - READY-RUNTIME
-  - READY-NATIVE-SKILL (or READY-RUNTIME-ONLY)
-```
-
-### Tool-specific note
-
-- For local repo usage, prefer `npm run unibrowse -- <command>`.
-- `npx unibrowse` also works after install in most environments, but `npm run` is the most deterministic path for agent workflows.
-- Keep the same guardrails across all AI CLIs: no token leakage, no raw cookie leakage, no auto-commit/push during setup.
-
-### Where to plug instructions by tool
-
-- Claude Code: standalone native skill in `.claude/skills/universal-browse/SKILL.md` via installer scripts; `CLAUDE.md` is supporting memory
-- Codex CLI: `AGENTS.md` / `AGENTS.override.md` (native discovery)
-- OpenCode: `AGENTS.md` (native, via `/init`)
-- Cursor/Windsurf/other IDE agents: workspace rules/instructions file
-- Gemini CLI: `GEMINI.md` (native project context file)
-- Kimi Code CLI: `AGENTS.md` (native, generated via `/init`)
-- Gemini/Kimi wrappers without native convention: fallback `AI_INSTRUCTIONS.md` but classify as runtime-only until native proof exists
-
-If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md`, but report status as `READY-RUNTIME-ONLY` until native registration is available.
-
-### Claude Code native install (recommended)
-
-Install the skill file directly in Claude native scope:
+Install the skill natively — this copies the full skill directory (SKILL.md + all references/) to Claude's skill scope:
 
 ```bash
-# project-native
-npm run install:claude:project
-
-# personal-native
-npm run install:claude:personal
+npm run install:claude:project     # project scope
+npm run install:claude:personal    # personal scope
 ```
 
-This path is deterministic and does not require marketplace setup.
-
-### Claude Code install policy
-
-Plugin-based install is no longer part of the supported integration path for this repository.
-Use standalone native skill install only:
+Verify:
 
 ```bash
-npm run install:claude:project
-# or
-npm run install:claude:personal
+ls ~/.claude/skills/universal-browse/references/
+# ai-cli-integration.md  linux-vps.md  macos.md  troubleshooting.md  windows.md
 ```
+
+### Claude.ai (Web)
+
+Generate an uploadable zip for Settings > Capabilities > Skills:
+
+```bash
+npm run install:claude:zip
+# produces universal-browse-skill.zip at repo root
+```
+
+### Other AI CLIs
+
+| Tool | Instruction file | Install |
+|------|-----------------|---------|
+| Codex CLI | `AGENTS.md` / `AGENTS.override.md` | Copy instruction block from `references/ai-cli-integration.md` |
+| OpenCode | `AGENTS.md` (via `/init`) | Same |
+| Gemini CLI | `GEMINI.md` | Same |
+| Kimi Code CLI | `AGENTS.md` (via `/init`) | Same |
+| IDE agents | Workspace rules file | Same |
+
+For a complete integration playbook with interactive bootstrap prompts, see `skill/universal-browse/references/ai-cli-integration.md`.
 
 ## How it works
-
-`unibrowse` is a CLI client that ensures a background server is running, then sends commands over localhost.
-
-1. CLI checks local state file (`.universal-browse/state.json`)
-2. Starts daemon if missing/stale
-3. Daemon launches Playwright Chromium with environment-aware strategy
-4. Commands are executed in a persistent browser context
-
-This gives stable behavior for long multi-step sessions where browser state matters.
-
-## Architecture diagram
 
 ```text
 ┌──────────────────────────┐
@@ -196,15 +144,13 @@ This gives stable behavior for long multi-step sessions where browser state matt
               │ localhost + bearer token
 ┌─────────────▼────────────────────────────────────┐
 │ Local Daemon (src/server.js)                     │
-│ - /health, /command                              │
-│ - /cookie-picker*                                │
+│ - /health, /command, /cookie-picker*             │
 └─────────────┬────────────────────────────────────┘
               │
 ┌─────────────▼────────────────────────────────────┐
 │ Browser Manager (src/browser-manager.js)         │
 │ - persistent Playwright context                  │
-│ - command execution + logs                        │
-│ - cookie import hooks                             │
+│ - command execution + logs + cookie hooks         │
 └─────────────┬────────────────────────────────────┘
               │
       ┌───────▼────────┐      ┌─────────────────────────┐
@@ -214,145 +160,90 @@ This gives stable behavior for long multi-step sessions where browser state matt
       └────────────────┘      └─────────────────────────┘
 ```
 
+1. CLI checks `.universal-browse/state.json`
+2. Starts daemon if missing or stale
+3. Daemon launches Chromium with environment-aware display strategy
+4. Commands execute in a persistent browser context with bearer auth
+
 ## Compatibility
 
-- **Linux desktop:** headed and headless
-- **Linux VPS/CI:** headless default
-- **Linux VPS headed:** auto uses `xvfb-run` when available
-- **macOS:** headed and headless
-- **Windows:** headed and headless
+| Environment | Mode | Notes |
+|-------------|------|-------|
+| Linux desktop | headed + headless | |
+| Linux VPS/CI | headless (default) | |
+| Linux VPS headed | auto Xvfb | Needs `xvfb` installed |
+| macOS | headed + headless | |
+| Windows | headed + headless | |
 
-Environment toggles:
+Environment variables:
 
 - `UNIVERSAL_BROWSE_MODE=headless|headed`
-- `UNIVERSAL_BROWSE_XVFB=0|1` (disable/enable Xvfb fallback)
+- `UNIVERSAL_BROWSE_XVFB=0|1`
 
-## Session transfer details
+## Challenge handling
 
-- `cookie-import <json-file>` loads Playwright-style cookies from local JSON.
-- `launch-with-profile <chrome|brave|edge> --profile <name>` runs against a real installed browser profile.
-- For Windows reliability, native profile mode is preferred over direct browser-cookie decryption.
+`goto` auto-detects Cloudflare and anti-bot challenges. In headless mode, the daemon switches to headed mode before retrying. A screenshot is captured and common interactions are attempted automatically.
+
+If CAPTCHA or MFA blocks automation: start headed mode (`UNIVERSAL_BROWSE_MODE=headed`), complete the manual step in the visible window, then resume with `snapshot`.
 
 ## Security model
 
-- Daemon binds to localhost only
-- Command endpoint requires bearer token
-- Path checks on local JSON cookie import
-- `cookies` command output masks cookie values by default
-- Treat JSON cookie exports as secrets (delete after use)
-- Optional strict mode: set `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` to require `--allow-plaintext-cookies` on `cookie-import`
-- No remote control channel exposed by default
+- Daemon binds to `127.0.0.1` only
+- Bearer token required for all commands
+- Cookie values redacted in `cookies` output
+- HTTP 500 responses never expose internal error messages
+- URL protocol validated (http/https only)
+- Optional strict mode: `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1`
 
-### Chromium cookie encryption
+## Known limitations
 
-The cookie import engine decrypts Chromium-format cookies using platform-specific key derivation:
-
-- **macOS:** PBKDF2-SHA1 with 1003 iterations, password from Keychain (`Chrome Safe Storage` / per-browser service name), salt `saltysalt`, producing a 16-byte AES-128-CBC key.
-- **Linux v10:** Same PBKDF2-SHA1 scheme with password `peanuts` and 1 iteration (hardcoded Chromium default).
-- **Linux v11:** PBKDF2-SHA1 with 1 iteration, password from `secret-tool` (GNOME keyring), same salt.
-- **Windows:** AES-256-GCM with a 32-byte master key stored in `Local State`, itself encrypted via DPAPI (`ProtectedData.Unprotect`). Newer Chrome versions use App-Bound Encryption (ABE) which is explicitly detected and rejected with `abe_unsupported`.
-
-These are implementation details of Chromium's `os_crypt` module and may change across browser versions. The `launch-with-profile` command sidesteps decryption entirely by reusing the real browser binary and profile directory.
-
-## Command reference
-
-```text
-status
-stop
-goto <url>
-text
-snapshot
-click <selector>
-fill <selector> <value>
-wait <ms>
-scroll <up|down> <pixels>
-eval <js expression>
-viewport <w>x<h>
-screenshot [path]
-console
-network
-cookies
-cookie-import <json-file>
-cookie-import <json-file> --allow-plaintext-cookies
-launch-with-profile <chrome|brave|edge> [--profile name]
-```
-
-Google account note:
-
-- Even with valid exported cookies, Google services (Gmail/Drive/Docs/GAIA) may reject imported sessions in a fresh Playwright context due to device/session binding controls.
-- In those cases, `cookie-import` is not a reliable auth transfer mechanism for Google properties.
-
-Challenge handling note:
-
-- `goto` detects common Cloudflare/anti-bot challenge states.
-- If a challenge is detected while running headless, runtime attempts to switch to headed automatically.
-- Runtime captures a challenge screenshot and attempts common interaction clicks before returning status.
-
-Native profile launch note:
-
-- `launch-with-profile` reuses your installed browser profile directory (`User Data`) and launches Playwright against that real profile.
-- Risks and constraints:
-  - close the source browser first to avoid profile lock conflicts,
-  - treat this mode as highly sensitive (live sessions/cookies/local browser state are accessible to automation),
-  - browser support is currently `chrome`, `brave`, and `edge`.
-
-## Skill package
-
-Claude-compatible skill files are included in:
-
-- `skill/universal-browse/SKILL.md`
-- `skill/universal-browse/references/`
-
-### Prompt to plug into any AI CLI
-
-Use this when a user wants their AI CLI to bootstrap and register a reusable `unibrowse` workflow in that tool's local config/project notes.
-
-```text
-You are my CLI automation assistant. Configure this repository so I can use universal-browse quickly from this tool.
-
-Repository: universal-browse
-Main command: npm run unibrowse -- <command>
-
-Tasks:
-1) Verify repo is up to date (git pull origin main).
-2) Install and validate (npm ci, playwright install, npm run preflight, npm test).
-3) Run smoke commands (status, goto, snapshot, screenshot, stop).
-4) Create or update this tool's local project instructions so future sessions know:
-   - use `npm run unibrowse -- <command>` for browser actions
-   - run `npm run preflight` before troubleshooting
-   - never expose daemon tokens in logs
-5) Print a final summary with:
-   - what was configured
-   - where config/instructions were written
-   - commands the user can run next
-
-Constraints:
-- no git commit or push
-- no destructive git commands
-- keep changes local to this project only
-```
-
-## Architecture decisions
-
-**HTTP over Unix sockets:** The daemon uses a plain HTTP server on `127.0.0.1` with a random port rather than a Unix domain socket. This ensures Windows compatibility without platform-specific transport code, and simplifies debugging since any HTTP client can interact with the daemon.
-
-**No TypeScript:** The project uses plain ESM JavaScript with JSDoc annotations where needed. This avoids a build step, keeps the dependency footprint minimal, and makes the code directly executable with `node` on any platform. The tradeoff is accepted: the codebase is small enough that type safety at the compiler level is not required.
-
-**Test automation scope:** Tests cover unit logic (crypto, helpers, config) and lightweight HTTP routing via mock managers. Full browser integration tests (Playwright launch + navigation) are intentionally excluded from CI to avoid flaky headless Chromium issues across platforms. The smoke flow (`status -> goto -> snapshot -> stop`) is validated manually or via the preflight script.
+- Google login may block Playwright browsers ("This browser or app may not be secure"), even in headed mode. Use `launch-with-profile` with a real profile for Google properties.
+- Windows ABE (App-Bound Encryption) in recent Chrome/Brave versions blocks direct cookie decryption — use JSON import or `launch-with-profile`.
 
 ## Development
 
 ```bash
-npm test
-npm run preflight
+npm test                # unit tests
+npm run lint            # ESLint
+npm run test:coverage   # coverage check (30% lines, 60% branches)
+npm run preflight       # runtime readiness
 ```
 
-For local repo usage (without global install), run the CLI via:
+## Project structure
 
-```bash
-npm run unibrowse -- status
-npm run unibrowse -- goto https://example.com
+```text
+universal-browse/
+├── src/
+│   ├── cli.js                    # CLI client
+│   ├── server.js                 # Local HTTP daemon
+│   ├── browser-manager.js        # Command execution
+│   ├── display-strategy.js       # Headless/headed/Xvfb detection
+│   ├── http-helpers.js           # HTTP utilities + auth
+│   ├── cookie-import-browser.js  # Chromium cookie decryption
+│   ├── cookie-picker-routes.js   # Cookie picker API endpoints
+│   └── cookie-picker-ui.js       # Cookie picker UI
+├── skill/universal-browse/
+│   ├── SKILL.md                  # Claude Code skill definition
+│   ├── references/               # Platform-specific docs
+│   └── tests/eval.json           # Skill trigger evaluation tests
+├── scripts/
+│   ├── preflight.js              # Environment checks
+│   ├── install-claude-skill.js   # Skill installer (recursive copy)
+│   ├── setup-linux.sh            # Linux bootstrap
+│   ├── setup-macos.sh            # macOS bootstrap
+│   └── setup-windows.ps1         # Windows bootstrap
+├── eslint.config.js
+├── .husky/pre-commit
+└── .github/workflows/ci.yml
 ```
+
+## Architecture decisions
+
+**HTTP on localhost over Unix sockets:** Ensures Windows compatibility without platform-specific transport code. Any HTTP client can debug the daemon.
+
+**Plain ESM JavaScript:** No build step, minimal dependencies, directly executable with `node`. The codebase is small enough that compiler-level type safety is not required.
+
+**No browser integration tests in CI:** Full Playwright launch tests are excluded from CI to avoid flaky headless issues across platforms. The smoke flow is validated via `preflight` and manual testing.
 
 ## License
 
