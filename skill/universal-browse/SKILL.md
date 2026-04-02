@@ -40,6 +40,8 @@ npm run unibrowse -- text
 npm run unibrowse -- snapshot
 npm run unibrowse -- click "button[type='submit']"
 npm run unibrowse -- fill "#email" "dev@example.com"
+npm run unibrowse -- scroll down 1200
+npm run unibrowse -- eval "document.title"
 npm run unibrowse -- screenshot /tmp/proof.png
 npm run unibrowse -- console
 npm run unibrowse -- network
@@ -89,5 +91,6 @@ UNIVERSAL_BROWSE_MODE=headed npx unibrowse status
 ## Known limitations
 
 - Google account login (Gmail/Drive/GAIA) may block Playwright-driven browsers with "This browser or app may not be secure", even in headed mode.
-- Preferred workaround: export cookies from a trusted logged-in browser (for example with Cookie-Editor), then run `npm run unibrowse -- cookie-import <file.json>`.
+- Google services can also reject already-authenticated exported cookies in a fresh Playwright context due to device/session binding controls.
+- Preferred workaround for Google properties: keep authentication in a regular browser profile and avoid relying on cookie replay for session transfer.
 - In strict environments with `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1`, add `--allow-plaintext-cookies` to acknowledge handling of sensitive cookie JSON.

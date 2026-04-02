@@ -264,6 +264,8 @@ snapshot
 click <selector>
 fill <selector> <value>
 wait <ms>
+scroll <up|down> <pixels>
+eval <js expression>
 viewport <w>x<h>
 screenshot [path]
 console
@@ -273,6 +275,11 @@ cookie-import <json-file>
 cookie-import <json-file> --allow-plaintext-cookies
 cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]
 ```
+
+Google account note:
+
+- Even with valid exported cookies, Google services (Gmail/Drive/Docs/GAIA) may reject imported sessions in a fresh Playwright context due to device/session binding controls.
+- In those cases, `cookie-import` is not a reliable auth transfer mechanism for Google properties.
 
 ## Skill package
 

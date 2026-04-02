@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import {
+  CookieImportError,
   findInstalledBrowsers,
   importCookies,
   listDomains,
@@ -14,6 +15,16 @@ function truncate(text, max = 12000) {
   if (typeof text !== "string") return "";
   if (text.length <= max) return text;
   return `${text.slice(0, max)}\n... [truncated]`;
+}
+
+function formatEvalResult(result) {
+  if (result === undefined) return "undefined";
+  if (typeof result === "string") return truncate(result);
+  try {
+    const json = JSON.stringify(result, null, 2);
+    if (typeof json === "string") return truncate(json);
+  } catch {}
+  return truncate(String(result));
 }
 
 const SENSITIVE_COOKIE_NAMES = new Set([
@@ -326,6 +337,25 @@ export class BrowserManager {
         await this.page.waitForTimeout(ms);
         return `OK: waited ${ms}ms`;
       }
+      case "scroll": {
+        const direction = String(args[0] || "").toLowerCase();
+        const pixels = Number(args[1] || "0");
+        if ((direction !== "up" && direction !== "down") || !Number.isFinite(pixels) || pixels <= 0) {
+          throw new Error("Usage: scroll <up|down> <pixels>");
+        }
+        const delta = direction === "up" ? -pixels : pixels;
+        const y = await this.page.evaluate((nextDelta) => {
+          window.scrollBy(0, nextDelta);
+          return Math.round(window.scrollY || window.pageYOffset || 0);
+        }, delta);
+        return `OK: scrolled ${direction} ${pixels}px (y=${y})`;
+      }
+      case "eval": {
+        const expression = args.join(" ").trim();
+        if (!expression) throw new Error("Usage: eval <js expression>");
+        const result = await this.page.evaluate((source) => (0, eval)(source), expression);
+        return formatEvalResult(result);
+      }
       case "viewport": {
         const raw = args[0] || "";
         const m = raw.match(/^(\d+)x(\d+)$/);
@@ -392,13 +422,29 @@ export class BrowserManager {
 
         if (parsed.domain) {
           const domain = parsed.domain;
-          const result = await importCookies(browserArg, [domain], profile);
+          let result;
+          try {
+            result = await importCookies(browserArg, [domain], profile);
+          } catch (err) {
+            if (err instanceof CookieImportError && err.code === "abe_unsupported") {
+              throw new Error(
+                `ERROR: ${browserArg} profile '${profile}' uses App-Bound Encryption (ABE), so direct decrypt/import is not available for this domain path. ` +
+                  "Workaround: export cookies via Cookie-Editor and import with `cookie-import <file.json>`.",
+              );
+            }
+            if (err instanceof CookieImportError && err.code === "db_locked") {
+              throw new Error(
+                `ERROR: cookie database is locked for ${browserArg} profile '${profile}'. Close ${browserArg} fully and retry.`,
+              );
+            }
+            throw err;
+          }
           if (result.cookies.length > 0) await this.page.context().addCookies(result.cookies);
           const alias = result.aliasNote ? ` (${result.aliasNote})` : "";
           if (result.count === 0 && result.failed > 0) {
             throw new Error(
               `ERROR: found ${result.failed} cookies for ${domain} from ${browserArg}, but none could be decrypted/imported. ` +
-                "Likely cause on Windows Chromium browsers: App-Bound Encryption (ABE). " +
+                "Likely causes: unsupported encryption state or browser-specific protection. " +
                 "Workaround: export cookies via Cookie-Editor and import with `cookie-import <file.json>`.",
             );
           }

@@ -52,11 +52,11 @@ npx unibrowse status
 
 - Symptom: Google sign-in shows "This browser or app may not be secure".
 - Cause: Google may block sign-ins from browsers controlled by software automation.
+- Related symptom: `cookie-import` succeeds but Gmail/Drive/Docs still redirects to `accounts.google.com`.
+- Related cause: Google session cookies can be validated against device/session binding signals and rejected when replayed in a fresh Playwright browser context.
 - Workaround:
-  - complete sign-in in a regular browser profile,
-  - export cookies,
-  - import with `npm run unibrowse -- cookie-import <file.json>`.
-- If strict acknowledgement is enabled, use `npm run unibrowse -- cookie-import <file.json> --allow-plaintext-cookies`.
+  - complete and keep Google-authenticated workflows in a regular browser profile,
+  - do not rely on cookie replay as a guaranteed auth transfer for Google properties.
 
 ## Claude Code native install issues
 

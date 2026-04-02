@@ -98,6 +98,8 @@ async function run() {
         "  click <selector>",
         "  fill <selector> <value>",
         "  wait <ms>",
+        "  scroll <up|down> <pixels>",
+        "  eval <js expression>",
         "  viewport <w>x<h>",
         "  screenshot [path]",
         "  cookies",

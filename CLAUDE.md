@@ -70,14 +70,21 @@ npm test
 
 1. Le CLI lit `.universal-browse/state.json`.
 2. Si le daemon est absent/stale, le CLI le relance automatiquement.
+3. Le mode (`headed`/`headless`) est persiste dans le state et reutilise par defaut sur les commandes suivantes.
 3. Le daemon lance Chromium via Playwright selon la strategie d'affichage.
 4. Les commandes passent via `POST /command` avec bearer token.
+5. `/health` remonte aussi la disponibilite reelle de la page (`pageAvailable`, `pageClosed`, `contextClosed`, `browserConnected`).
 
 ## Modes d'execution
 
 - `UNIVERSAL_BROWSE_MODE=headless` (defaut, recommande VPS/CI)
 - `UNIVERSAL_BROWSE_MODE=headed` (debug visuel)
 - `UNIVERSAL_BROWSE_XVFB=0` pour desactiver l'auto-Xvfb
+
+Notes mode:
+
+- Si `UNIVERSAL_BROWSE_MODE` n'est pas fourni, le CLI reprend le mode persiste du daemon (via `.universal-browse/state.json`).
+- En session headed, il n'est plus necessaire de prefixer chaque commande avec `UNIVERSAL_BROWSE_MODE=headed` si le daemon existe deja en headed.
 
 Exemple VPS headed:
 
@@ -108,6 +115,8 @@ Notes:
 - Windows Chrome/Brave recents (ABE): detection explicite `abe_unsupported` + fallback JSON
 - `cookie-import-browser` est strict sur les flags inconnus (erreur immediate)
 - les requetes `twitter.com` peuvent etre retentees automatiquement sur alias `x.com`
+- `cookie-import` normalise automatiquement `sameSite` (ex: `no_restriction` -> `None`, valeurs invalides -> fallback `Lax`)
+- `cookie-import-browser --domain` retourne maintenant une erreur explicite si `0 imported` et `failed > 0` (ABE probable) avec workaround JSON
 
 ## Modifier le skill proprement
 
@@ -180,6 +189,12 @@ git push
   - verifier si le navigateur source est en chiffrement App-Bound
 - Erreur picker "Failed to fetch":
   - consulter `/cookie-picker/debug` et les logs stderr `[cookie-picker]`
+- Snapshot instable en headed:
+  - le runtime tente une auto-recuperation (recreation page + retry unique)
+  - si echec persistant: `npm run unibrowse -- stop` puis relancer `status -> goto -> snapshot`
+- Google login bloque ("This browser or app may not be secure"):
+  - faire le login dans un navigateur standard
+  - exporter les cookies puis `npm run unibrowse -- cookie-import <json-file>`
 
 ## Definition of done pour changements runtime
 

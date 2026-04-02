@@ -21,7 +21,8 @@ npm run setup:windows
 ## Google sign-in limitation
 
 - Google can block Playwright-driven login flows with "This browser or app may not be secure".
-- Recommended path: sign in in regular Chrome/Brave, export cookies, then import with `npx unibrowse cookie-import <file.json>`.
+- Google services can also reject imported cookies from an already logged-in session when replayed in a fresh Playwright context (device/session binding checks).
+- Recommended path: sign in and continue Google workflows in a regular Chrome/Brave profile instead of relying on cookie replay.
 
 ## Typical workflow
 

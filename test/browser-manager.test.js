@@ -141,6 +141,33 @@ test("cookie-import-browser rejects unknown flags", async () => {
   await assert.rejects(manager.exec("cookie-import-browser", ["--unknown-flag"]), /Unknown flag/);
 });
 
+test("scroll command scrolls in requested direction", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    async evaluate(_fn, delta) {
+      return delta > 0 ? 250 : 130;
+    },
+  };
+
+  const down = await manager.exec("scroll", ["down", "250"]);
+  assert.match(down, /OK: scrolled down 250px/);
+
+  const up = await manager.exec("scroll", ["up", "120"]);
+  assert.match(up, /OK: scrolled up 120px/);
+});
+
+test("eval command evaluates expression", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    async evaluate(fn, source) {
+      return fn(source);
+    },
+  };
+
+  const output = await manager.exec("eval", ["1", "+", "2"]);
+  assert.equal(output, "3");
+});
+
 test("snapshot retries once by recreating page when closed", async () => {
   const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
 

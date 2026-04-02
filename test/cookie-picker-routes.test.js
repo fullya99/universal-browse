@@ -43,10 +43,12 @@ function withTempLinuxConfig(t, run) {
     HOME: process.env.HOME,
     LOCALAPPDATA: process.env.LOCALAPPDATA,
     APPDATA: process.env.APPDATA,
+    USERPROFILE: process.env.USERPROFILE,
   };
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "universal-browse-picker-test-"));
   process.env.HOME = root;
+  process.env.USERPROFILE = root;
   delete process.env.LOCALAPPDATA;
   delete process.env.APPDATA;
 
@@ -59,6 +61,9 @@ function withTempLinuxConfig(t, run) {
 
     if (previous.APPDATA === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = previous.APPDATA;
+
+    if (previous.USERPROFILE === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previous.USERPROFILE;
 
     fs.rmSync(root, { recursive: true, force: true });
   });
