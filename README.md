@@ -123,7 +123,8 @@ npm run install:claude:zip
 |------|-----------------|---------|
 | Codex CLI | `AGENTS.md` / `AGENTS.override.md` | Copy instruction block from `references/ai-cli-integration.md` |
 | OpenCode | `AGENTS.md` (via `/init`) | Same |
-| Gemini CLI | `GEMINI.md` | Same |
+| OpenClaw | `skills/universal-browse/SKILL.md` | `cp -r skill/universal-browse <workspace>/skills/universal-browse` |
+| Gemini CLI | `GEMINI.md` | Copy instruction block from `references/ai-cli-integration.md` |
 | Kimi Code CLI | `AGENTS.md` (via `/init`) | Same |
 | IDE agents | Workspace rules file | Same |
 

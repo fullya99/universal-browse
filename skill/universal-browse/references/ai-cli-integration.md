@@ -11,6 +11,7 @@ Integration strategy below is based on public docs/repositories:
 - OpenCode docs: `/init` creates `AGENTS.md` in project root.
 - Gemini CLI repo/docs: explicit project context file `GEMINI.md`.
 - Kimi Code CLI docs: `/init` generates project `AGENTS.md` and is the native project instruction path.
+- OpenClaw docs: AgentSkills-compatible `SKILL.md` folders, discovered in `<workspace>/skills/` (highest priority), `~/.openclaw/skills/`, or `skills.load.extraDirs`.
 
 ## 1) Integration contract (native-first)
 
@@ -77,6 +78,7 @@ Apply these defaults unless the user chooses otherwise:
 - OpenCode: prefer project `AGENTS.md` via `/init`.
 - Gemini CLI: prefer project `GEMINI.md`.
 - Kimi Code CLI: prefer project `AGENTS.md` via `/init`.
+- OpenClaw: prefer workspace `skills/universal-browse/SKILL.md`; gateway-level via `~/.openclaw/skills/` if user asks global scope.
 
 If user chooses runtime-only fallback, still run section 5 and report `READY-RUNTIME-ONLY`.
 
@@ -103,6 +105,11 @@ Use the first exact match. Do not downgrade to generic files if a native locatio
 - Kimi Code CLI
   - native instructions: `AGENTS.md` generated/managed via `/init`
   - proof command: run `/init` if file missing, then ask Kimi to summarize active project instructions
+- OpenClaw
+  - native skill location: `<workspace>/skills/universal-browse/SKILL.md` (project) or `~/.openclaw/skills/universal-browse/SKILL.md` (global)
+  - install: copy (or symlink) `skill/universal-browse/` into the target `skills/` directory
+  - proof command: `openclaw skills list --eligible` and verify `universal-browse` appears
+  - alternative: `openclaw skills check` to validate the skill folder
 - IDE agents (Cursor, Windsurf, JetBrains plugins, etc.)
   - use workspace instruction/rules file if available
   - otherwise use `AGENTS.md` and mark status as runtime-only for that IDE until native proof exists
@@ -253,6 +260,30 @@ npm run install:claude:zip
 - Use `/init` to generate project `AGENTS.md` if missing, then append the instruction block.
 - Do not mark native-ready until Kimi confirms active project instructions.
 
+### OpenClaw
+
+- OpenClaw uses AgentSkills-compatible `SKILL.md` folders — the same format as Claude Code skills.
+- Copy the skill directory into the workspace or global scope:
+
+```bash
+# Project scope (highest priority)
+cp -r skill/universal-browse <workspace>/skills/universal-browse
+
+# Global scope
+cp -r skill/universal-browse ~/.openclaw/skills/universal-browse
+```
+
+- Verify the skill is loaded:
+
+```bash
+openclaw skills list --eligible   # should show universal-browse
+openclaw skills check             # validate skill folder structure
+```
+
+- OpenClaw snapshots eligible skills at session start. If you install mid-session, start a new session or enable `skills.load.watch: true` in `~/.openclaw/openclaw.json`.
+- Optional gating metadata is already compatible — `metadata.tags` in the frontmatter is ignored by OpenClaw (no conflict), and `allowed-tools` maps to tool policy configuration if needed.
+- Do not mark native-ready until `openclaw skills list --eligible` shows `universal-browse`.
+
 ## 10) Common integration failures
 
 - `npx unibrowse` not found: use `npm run unibrowse -- <command>`.
@@ -261,4 +292,5 @@ npm run install:claude:zip
 - Linux headed without display: install Xvfb or use headless mode.
 - macOS cookie decrypt blocked: keychain approval required.
 - Windows cookie decrypt blocked: run under the same user profile and ensure PowerShell is available.
+- OpenClaw skill not detected: verify the folder is in a discovery path (`openclaw skills check`), start a new session if installed mid-conversation, or add the path to `skills.load.extraDirs` in `~/.openclaw/openclaw.json`.
 - Google login blocked in automation browser: if Google shows "This browser or app may not be secure", use cookie handoff (`cookie-import`) from a trusted regular browser session instead of in-automation sign-in.
