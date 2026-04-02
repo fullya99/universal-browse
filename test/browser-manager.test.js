@@ -168,6 +168,34 @@ test("eval command evaluates expression", async () => {
   assert.equal(output, "3");
 });
 
+test("launch-with-profile validates and relaunches with native profile", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {};
+  let captured = null;
+  manager.launchWithRealProfile = async (browser, profile) => {
+    captured = { browser, profile };
+    return {
+      displayName: "Brave",
+      profile,
+      userDataDir: "/tmp/fake-profile",
+    };
+  };
+
+  const output = await manager.exec("launch-with-profile", ["brave", "--profile", "Default"]);
+  assert.deepEqual(captured, { browser: "brave", profile: "Default" });
+  assert.match(output, /OK: launched Brave native profile 'Default'/);
+  assert.match(output, /WARNING: this mode reuses your real browser profile/);
+});
+
+test("launch-with-profile rejects unknown flags", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {};
+  await assert.rejects(
+    manager.exec("launch-with-profile", ["brave", "--unknown"]),
+    /Unknown flag/,
+  );
+});
+
 test("snapshot retries once by recreating page when closed", async () => {
   const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
 

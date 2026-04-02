@@ -49,6 +49,7 @@ npm run unibrowse -- cookie-import /tmp/cookies.json
 npm run unibrowse -- cookie-import-browser chrome --domain .github.com --profile Default
 npm run unibrowse -- cookie-import-browser chrome --list-domains --profile Default
 npm run unibrowse -- cookie-import-browser chrome
+npm run unibrowse -- launch-with-profile brave --profile Default
 ```
 
 ## Cookie importer (full suite)
@@ -58,9 +59,11 @@ npm run unibrowse -- cookie-import-browser chrome
 - `cookie-import-browser <browser> --domain <domain> [--profile <profile>]` decrypts and imports from installed Chromium-based browsers.
 - `cookie-import-browser <browser> --list-domains [--profile <profile>]` prints domain inventory as text for automation/agents.
 - `cookie-import-browser <browser>` opens the local cookie picker UI for profile/domain selection.
+- `launch-with-profile <chrome|brave|edge> [--profile <name>]` relaunches runtime with a native browser profile (`User Data`) for sites that reject cookie replay in fresh contexts.
 - Unknown flags on `cookie-import-browser` return an explicit usage error.
 - Picker routes are local-only (`127.0.0.1`) and token-protected for data/action requests.
 - `cookies` output masks cookie values by default; do not expose raw cookie files in logs.
+- Launch-with-profile is sensitive: close the source browser first and treat automation output/logs as potentially containing live account data.
 
 ## Linux VPS strategy
 

@@ -274,12 +274,21 @@ cookies
 cookie-import <json-file>
 cookie-import <json-file> --allow-plaintext-cookies
 cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]
+launch-with-profile <chrome|brave|edge> [--profile name]
 ```
 
 Google account note:
 
 - Even with valid exported cookies, Google services (Gmail/Drive/Docs/GAIA) may reject imported sessions in a fresh Playwright context due to device/session binding controls.
 - In those cases, `cookie-import` is not a reliable auth transfer mechanism for Google properties.
+
+Native profile launch note:
+
+- `launch-with-profile` reuses your installed browser profile directory (`User Data`) and launches Playwright against that real profile.
+- Risks and constraints:
+  - close the source browser first to avoid profile lock conflicts,
+  - treat this mode as highly sensitive (live sessions/cookies/local browser state are accessible to automation),
+  - browser support is currently `chrome`, `brave`, and `edge`.
 
 ## Skill package
 

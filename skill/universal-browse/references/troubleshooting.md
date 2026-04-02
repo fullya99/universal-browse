@@ -38,6 +38,11 @@ npx unibrowse status
   - for diagnostics, query `GET /cookie-picker/debug?browser=<name>&profile=<profile>`.
 - `db_locked`:
   - close the browser fully, then retry import.
+- `launch-with-profile` fails with lock/singleton error:
+  - close Chrome/Brave/Edge completely (all background processes), then retry.
+- `launch-with-profile` starts but auth behavior is unexpected:
+  - ensure the same browser family/profile was selected (`--profile Default` vs `Profile N`).
+  - note: support is currently Chrome/Brave/Edge.
 - Sensitive cookie JSON on disk:
   - cookie export files can contain live session tokens (`auth_token`, `ct0`, etc.).
   - delete temporary cookie files immediately after import.

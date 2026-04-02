@@ -27,6 +27,61 @@ function formatEvalResult(result) {
   return truncate(String(result));
 }
 
+const PROFILE_LAUNCH_REGISTRY = {
+  chrome: {
+    displayName: "Chrome",
+    dataDirByPlatform: {
+      darwin: path.join("Library", "Application Support", "Google", "Chrome"),
+      linux: path.join(".config", "google-chrome"),
+      win32: path.join("Google", "Chrome", "User Data"),
+    },
+    channel: "chrome",
+    executableCandidatesByPlatform: {
+      darwin: ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+      linux: ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"],
+      win32: [
+        path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
+        path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
+        path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
+      ],
+    },
+  },
+  brave: {
+    displayName: "Brave",
+    dataDirByPlatform: {
+      darwin: path.join("Library", "Application Support", "BraveSoftware", "Brave-Browser"),
+      linux: path.join(".config", "BraveSoftware", "Brave-Browser"),
+      win32: path.join("BraveSoftware", "Brave-Browser", "User Data"),
+    },
+    executableCandidatesByPlatform: {
+      darwin: ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"],
+      linux: ["/usr/bin/brave-browser", "/usr/bin/brave"],
+      win32: [
+        path.join(process.env.LOCALAPPDATA || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        path.join(process.env.PROGRAMFILES || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        path.join(process.env["PROGRAMFILES(X86)"] || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+      ],
+    },
+  },
+  edge: {
+    displayName: "Edge",
+    dataDirByPlatform: {
+      darwin: path.join("Library", "Application Support", "Microsoft Edge"),
+      linux: path.join(".config", "microsoft-edge"),
+      win32: path.join("Microsoft", "Edge", "User Data"),
+    },
+    channel: "msedge",
+    executableCandidatesByPlatform: {
+      darwin: ["/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"],
+      linux: ["/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable"],
+      win32: [
+        path.join(process.env.PROGRAMFILES || "", "Microsoft", "Edge", "Application", "msedge.exe"),
+        path.join(process.env["PROGRAMFILES(X86)"] || "", "Microsoft", "Edge", "Application", "msedge.exe"),
+      ],
+    },
+  },
+};
+
 const SENSITIVE_COOKIE_NAMES = new Set([
   "auth_token",
   "ct0",
@@ -58,6 +113,80 @@ function isPathWithin(baseDir, targetPath) {
   const target = path.resolve(targetPath);
   const relative = path.relative(base, target);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function parseLaunchWithProfileArgs(args) {
+  const parsed = {
+    browser: "",
+    profile: "Default",
+  };
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--profile") {
+      const next = args[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error("Usage: launch-with-profile <chrome|brave|edge> [--profile <name>]");
+      }
+      parsed.profile = next;
+      i++;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown flag: ${arg}`);
+    }
+    positional.push(arg);
+  }
+  if (positional.length !== 1) {
+    throw new Error("Usage: launch-with-profile <chrome|brave|edge> [--profile <name>]");
+  }
+  parsed.browser = String(positional[0] || "").trim().toLowerCase();
+  if (!PROFILE_LAUNCH_REGISTRY[parsed.browser]) {
+    throw new Error("Usage: launch-with-profile <chrome|brave|edge> [--profile <name>]");
+  }
+  if (/[/\\]|\.\./.test(parsed.profile) || /[\x00-\x1f]/.test(parsed.profile)) {
+    throw new Error(`Invalid profile name: '${parsed.profile}'`);
+  }
+  return parsed;
+}
+
+function getRealProfileLaunchSpec(browser, profile) {
+  const spec = PROFILE_LAUNCH_REGISTRY[browser];
+  if (!spec) {
+    throw new Error("Usage: launch-with-profile <chrome|brave|edge> [--profile <name>]");
+  }
+
+  const dataDirSuffix = spec.dataDirByPlatform[process.platform];
+  if (!dataDirSuffix) {
+    throw new Error(`Real profile launch is not supported on platform: ${process.platform}`);
+  }
+
+  const profileBaseDir = process.platform === "win32"
+    ? process.env.LOCALAPPDATA || process.env.APPDATA || path.join(os.homedir(), "AppData", "Local")
+    : os.homedir();
+  const userDataDir = path.join(profileBaseDir, dataDirSuffix);
+  if (!fs.existsSync(userDataDir)) {
+    throw new Error(`Browser data directory not found: ${userDataDir}`);
+  }
+
+  let executablePath = null;
+  const candidates = spec.executableCandidatesByPlatform[process.platform] || [];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (fs.existsSync(candidate)) {
+      executablePath = candidate;
+      break;
+    }
+  }
+
+  return {
+    displayName: spec.displayName,
+    browser,
+    profile,
+    userDataDir,
+    channel: spec.channel || null,
+    executablePath,
+  };
 }
 
 function formatA11y(node, depth = 0, lines = []) {
@@ -212,6 +341,49 @@ export class BrowserManager {
     this.page = await this.context.newPage();
     this.wireEvents(this.page);
     this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
+  }
+
+  async launchWithRealProfile(browser, profile = "Default") {
+    const spec = getRealProfileLaunchSpec(browser, profile);
+    const lockPath = path.join(spec.userDataDir, "SingletonLock");
+    if (fs.existsSync(lockPath)) {
+      throw new Error(
+        `Detected lock file at ${lockPath}. Close ${spec.displayName} completely before launching with native profile.`,
+      );
+    }
+
+    await this.close();
+
+    const args = [`--profile-directory=${spec.profile}`];
+    if (this.strategy.noSandbox) args.push("--no-sandbox");
+
+    const launchOptions = {
+      headless: this.strategy.useHeadless,
+      args,
+      viewport: { width: 1280, height: 720 },
+    };
+    if (spec.executablePath) launchOptions.executablePath = spec.executablePath;
+    else if (spec.channel) launchOptions.channel = spec.channel;
+
+    try {
+      this.context = await chromium.launchPersistentContext(spec.userDataDir, launchOptions);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/singleton|lock|profile in use|already in use/i.test(message)) {
+        throw new Error(
+          `Native profile is locked by a running browser process for ${spec.displayName}. Close the browser and retry.`,
+        );
+      }
+      throw err;
+    }
+
+    this.browser = this.context.browser();
+    const pages = this.context.pages();
+    this.page = pages.length > 0 ? pages[0] : await this.context.newPage();
+    this.wireEvents(this.page);
+    this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
+
+    return spec;
   }
 
   wireEvents(page) {
@@ -469,6 +641,15 @@ export class BrowserManager {
         } catch {}
 
         return `Cookie picker opened at ${pickerUrl}\nDetected browsers: ${browsers.map((b) => b.name).join(", ")}`;
+      }
+      case "launch-with-profile": {
+        const parsed = parseLaunchWithProfileArgs(args);
+        const spec = await this.launchWithRealProfile(parsed.browser, parsed.profile);
+        return [
+          `OK: launched ${spec.displayName} native profile '${spec.profile}'`,
+          `userDataDir: ${spec.userDataDir}`,
+          "WARNING: this mode reuses your real browser profile and may expose live authenticated sessions/logged data to the automation context.",
+        ].join("\n");
       }
       case "console":
         return this.consoleLog;

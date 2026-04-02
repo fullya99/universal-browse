@@ -18,6 +18,12 @@ npm run setup:windows
 - On Chromium/Brave with App-Bound Encryption (ABE), direct decrypt may fail for all cookies; use JSON export + `cookie-import` fallback.
 - If `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` is enabled, append `--allow-plaintext-cookies` to `cookie-import`.
 
+## Native profile mode
+
+- Use `npm run unibrowse -- launch-with-profile <chrome|brave|edge> --profile Default` to run with a real browser profile.
+- Close the browser first to avoid lock conflicts.
+- This mode exposes live profile state (sessions, cookies, site data) to automation; handle outputs carefully.
+
 ## Google sign-in limitation
 
 - Google can block Playwright-driven login flows with "This browser or app may not be secure".
