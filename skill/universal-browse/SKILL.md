@@ -35,17 +35,17 @@ npm run unibrowse -- status
 ## Command patterns
 
 ```bash
-npx unibrowse goto https://your-app.example
-npx unibrowse text
-npx unibrowse snapshot
-npx unibrowse click "button[type='submit']"
-npx unibrowse fill "#email" "dev@example.com"
-npx unibrowse screenshot /tmp/proof.png
-npx unibrowse console
-npx unibrowse network
-npx unibrowse cookie-import /tmp/cookies.json
-npx unibrowse cookie-import-browser chrome --domain .github.com --profile Default
-npx unibrowse cookie-import-browser chrome
+npm run unibrowse -- goto https://your-app.example
+npm run unibrowse -- text
+npm run unibrowse -- snapshot
+npm run unibrowse -- click "button[type='submit']"
+npm run unibrowse -- fill "#email" "dev@example.com"
+npm run unibrowse -- screenshot /tmp/proof.png
+npm run unibrowse -- console
+npm run unibrowse -- network
+npm run unibrowse -- cookie-import /tmp/cookies.json
+npm run unibrowse -- cookie-import-browser chrome --domain .github.com --profile Default
+npm run unibrowse -- cookie-import-browser chrome
 ```
 
 ## Cookie importer (full suite)
@@ -65,6 +65,7 @@ See details:
 - `references/linux-vps.md`
 - `references/macos.md`
 - `references/windows.md`
+- `references/ai-cli-integration.md`
 - `references/troubleshooting.md`
 
 ## Handoff protocol

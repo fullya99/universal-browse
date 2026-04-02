@@ -91,6 +91,8 @@ npm run unibrowse -- cookie-import-browser chrome
 
 If your users run AI agents in terminal tools (Claude Code, Codex CLI, OpenCode, Gemini CLI wrappers, etc.), give them a single prompt that installs, validates, and smoke-tests `universal-browse` in one run.
 
+For a complete adapter playbook (CLI + IDE), see `skill/universal-browse/references/ai-cli-integration.md`.
+
 ### Copy-paste prompt (universal)
 
 ```text
@@ -146,6 +148,16 @@ Steps:
 
 - For local repo usage, prefer `npm run unibrowse -- <command>`.
 - `npx unibrowse` also works after install in most environments, but `npm run` is the most deterministic path for agent workflows.
+
+### Where to plug instructions by tool
+
+- Claude Code: project `CLAUDE.md` (or session instructions if no project file)
+- Codex CLI: project `AGENTS.md` or local agent instruction file used by your Codex setup
+- OpenCode: project instruction file configured for the current workspace
+- Cursor/Windsurf/other IDE agents: workspace rules/instructions file
+- Gemini CLI wrappers: project prompt/instruction file loaded at session start
+
+If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md` and paste the integration prompt there.
 
 ## How it works
 
