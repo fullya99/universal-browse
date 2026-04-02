@@ -102,7 +102,7 @@ async function run() {
         "  screenshot [path]",
         "  cookies",
         "  cookie-import <json-file> [--allow-plaintext-cookies]",
-        "  cookie-import-browser [browser] [--domain d] [--profile p]",
+        "  cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]",
         "  console",
         "  network",
       ].join("\n") + "\n",

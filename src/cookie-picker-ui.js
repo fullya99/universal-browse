@@ -53,8 +53,15 @@ export function getCookiePickerHTML(port, token) {
       const headers = { ...(opts.headers || {}) };
       if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
       const r = await fetch(BASE + path, { ...opts, headers });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || body.message || "Request failed");
+      const rawText = await r.text();
+      let body = {};
+      try {
+        body = rawText.length > 0 ? JSON.parse(rawText) : {};
+      } catch {}
+      if (!r.ok) {
+        const serverMessage = body.error || body.message || rawText || "Request failed";
+        throw new Error("HTTP " + r.status + ": " + serverMessage);
+      }
       return body;
     }
 
@@ -138,11 +145,11 @@ export function getCookiePickerHTML(port, token) {
     }
 
     browserEl.addEventListener("change", loadProfiles);
-    document.getElementById("load").addEventListener("click", () => loadDomains().catch((e) => status(e.message, "err")));
-    document.getElementById("import").addEventListener("click", () => importSelected().catch((e) => status(e.message, "err")));
-    document.getElementById("remove").addEventListener("click", () => removeSelected().catch((e) => status(e.message, "err")));
+    document.getElementById("load").addEventListener("click", () => loadDomains().catch((e) => status("Failed to fetch: " + e.message, "err")));
+    document.getElementById("import").addEventListener("click", () => importSelected().catch((e) => status("Failed to fetch: " + e.message, "err")));
+    document.getElementById("remove").addEventListener("click", () => removeSelected().catch((e) => status("Failed to fetch: " + e.message, "err")));
 
-    loadBrowsers().catch((e) => status(e.message, "err"));
+    loadBrowsers().catch((e) => status("Failed to fetch: " + e.message, "err"));
   </script>
 </body>
 </html>`;

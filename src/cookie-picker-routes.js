@@ -10,6 +10,11 @@ import { getCookiePickerHTML } from "./cookie-picker-ui.js";
 const importedDomains = new Set();
 const importedCounts = new Map();
 
+function logPickerError(pathname, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`[cookie-picker] ${pathname}: ${message}\n`);
+}
+
 function sendJson(res, status, payload, port) {
   res.writeHead(status, {
     "content-type": "application/json",
@@ -80,6 +85,37 @@ export async function handleCookiePickerRoute(req, res, url, browserManager, aut
       return sendJson(res, 200, result, port);
     }
 
+    if (pathname === "/cookie-picker/debug" && req.method === "GET") {
+      const browserName = url.searchParams.get("browser") || null;
+      const profile = url.searchParams.get("profile") || "Default";
+      const debug = {
+        browserName,
+        profile,
+        browsers: [],
+        profiles: null,
+        domains: null,
+        errors: [],
+      };
+      try {
+        debug.browsers = findInstalledBrowsers().map((b) => ({ name: b.name, aliases: b.aliases }));
+      } catch (err) {
+        debug.errors.push({ scope: "browsers", message: err instanceof Error ? err.message : String(err) });
+      }
+      if (browserName) {
+        try {
+          debug.profiles = listProfiles(browserName);
+        } catch (err) {
+          debug.errors.push({ scope: "profiles", message: err instanceof Error ? err.message : String(err) });
+        }
+        try {
+          debug.domains = await listDomains(browserName, profile);
+        } catch (err) {
+          debug.errors.push({ scope: "domains", message: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      return sendJson(res, 200, debug, port);
+    }
+
     if (pathname === "/cookie-picker/import" && req.method === "POST") {
       const body = await parseBody(req);
       const browser = body.browser;
@@ -137,8 +173,10 @@ export async function handleCookiePickerRoute(req, res, url, browserManager, aut
     res.end(JSON.stringify({ error: "Not found" }));
   } catch (err) {
     if (err instanceof CookieImportError) {
+      logPickerError(pathname, err);
       return sendJson(res, 400, { error: err.message, code: err.code, action: err.action }, port);
     }
+    logPickerError(pathname, err);
     return sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) }, port);
   }
 }

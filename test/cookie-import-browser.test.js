@@ -186,3 +186,42 @@ test("importCookies matches dotted and non-dotted domain inputs", async (t) => {
     assert.equal(urlHost.count, 1);
   });
 });
+
+test("importCookies retries twitter.com with x.com alias", async (t) => {
+  await withTempLinuxConfig(t, async (root) => {
+    const browserDir = path.join(root, ".config", "BraveSoftware", "Brave-Browser");
+    const dbPath = path.join(browserDir, "Default", "Network", "Cookies");
+    createCookieDb(dbPath, [".x.com"]);
+
+    const result = await importCookies("brave", ["twitter.com"], "Default");
+    assert.equal(result.count, 1);
+    assert.match(result.aliasNote || "", /x\.com alias/);
+  });
+});
+
+test("importCookies returns abe_unsupported when app_bound key exists on Windows", async (t) => {
+  await withTempWindowsAppData(t, async (root) => {
+    const browserRoot = path.join(root, "BraveSoftware", "Brave-Browser", "User Data");
+    const dbPath = path.join(browserRoot, "Default", "Network", "Cookies");
+    createCookieDb(dbPath, [".x.com"]);
+
+    fs.writeFileSync(
+      path.join(browserRoot, "Local State"),
+      JSON.stringify(
+        {
+          os_crypt: {
+            app_bound_encrypted_key: "dummy",
+            encrypted_key: Buffer.from("DPAPIdummy").toString("base64"),
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    await assert.rejects(
+      importCookies("brave", ["x.com"], "Default"),
+      (err) => err instanceof CookieImportError && err.code === "abe_unsupported",
+    );
+  });
+});

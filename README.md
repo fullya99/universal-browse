@@ -42,8 +42,9 @@ Most browser automation tools are either:
 - Full cookie importer:
   - `cookie-import <json-file>`
   - `cookie-import-browser <browser> --domain <domain> [--profile <profile>]`
+  - `cookie-import-browser <browser> --list-domains [--profile <profile>]`
   - interactive picker at `/cookie-picker`
-- Decryption support for Chromium-style cookies (macOS `v10`, Linux `v10`/`v11`, Windows DPAPI + AES-GCM)
+- Decryption support for Chromium-style cookies (macOS `v10`, Linux `v10`/`v11`, Windows DPAPI + AES-GCM with explicit App-Bound Encryption detection)
 
 ## Quickstart
 
@@ -238,6 +239,7 @@ The browser importer reads Chromium profile cookie DBs and converts them into Pl
 - Domain-scoped import for precise session transfer
 - macOS keychain integration (`security`) and Linux secret service integration (`secret-tool`)
 - Windows DPAPI + Chromium `Local State` master-key decryption
+- App-Bound Encryption (`app_bound_encrypted_key`) detection with explicit `abe_unsupported` error and picker fallback guidance
 - Safe fallback for locked DBs by reading from temporary copied SQLite DB files
 
 ## Security model
@@ -269,7 +271,7 @@ network
 cookies
 cookie-import <json-file>
 cookie-import <json-file> --allow-plaintext-cookies
-cookie-import-browser [browser] [--domain d] [--profile p]
+cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]
 ```
 
 ## Skill package

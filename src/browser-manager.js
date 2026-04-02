@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import {
   findInstalledBrowsers,
   importCookies,
+  listDomains,
   listSupportedBrowserNames,
 } from "./cookie-import-browser.js";
 
@@ -58,6 +59,52 @@ function formatA11y(node, depth = 0, lines = []) {
     for (const child of node.children) formatA11y(child, depth + 1, lines);
   }
   return lines;
+}
+
+function parseCookieImportBrowserArgs(args) {
+  const parsed = {
+    browser: "chrome",
+    domain: null,
+    profile: "Default",
+    listDomains: false,
+  };
+
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--domain") {
+      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+        throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
+      }
+      parsed.domain = args[i + 1];
+      i++;
+      continue;
+    }
+    if (arg === "--profile") {
+      if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+        throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
+      }
+      parsed.profile = args[i + 1];
+      i++;
+      continue;
+    }
+    if (arg === "--list-domains") {
+      parsed.listDomains = true;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown flag: ${arg}`);
+    }
+    positional.push(arg);
+  }
+
+  if (positional.length > 1) {
+    throw new Error("Usage: cookie-import-browser [browser] [--domain d] [--profile p] [--list-domains]");
+  }
+  if (positional.length === 1) {
+    parsed.browser = positional[0];
+  }
+  return parsed;
 }
 
 async function renderSnapshot(page) {
@@ -244,16 +291,25 @@ export class BrowserManager {
         return `OK: loaded ${cookies.length} cookies from ${resolved}\nWARNING: cookie files may contain live session secrets; delete file after import.`;
       }
       case "cookie-import-browser": {
-        const browserArg = args[0] || "chrome";
-        const domainIdx = args.indexOf("--domain");
-        const profileIdx = args.indexOf("--profile");
-        const profile = profileIdx !== -1 && profileIdx + 1 < args.length ? args[profileIdx + 1] : "Default";
+        const parsed = parseCookieImportBrowserArgs(args);
+        const browserArg = parsed.browser;
+        const profile = parsed.profile;
 
-        if (domainIdx !== -1 && domainIdx + 1 < args.length) {
-          const domain = args[domainIdx + 1];
+        if (parsed.listDomains) {
+          const result = await listDomains(browserArg, profile);
+          if (!Array.isArray(result.domains) || result.domains.length === 0) {
+            return `OK: no domains found for ${browserArg} (${profile})`;
+          }
+          const lines = result.domains.map((row) => `${row.domain}\t${row.count}`);
+          return lines.join("\n");
+        }
+
+        if (parsed.domain) {
+          const domain = parsed.domain;
           const result = await importCookies(browserArg, [domain], profile);
           if (result.cookies.length > 0) await this.page.context().addCookies(result.cookies);
-          return `OK: imported ${result.count} cookies for ${domain} from ${browserArg}${result.failed ? ` (${result.failed} failed)` : ""}`;
+          const alias = result.aliasNote ? ` (${result.aliasNote})` : "";
+          return `OK: imported ${result.count} cookies for ${domain} from ${browserArg}${result.failed ? ` (${result.failed} failed)` : ""}${alias}`;
         }
 
         const browsers = findInstalledBrowsers();

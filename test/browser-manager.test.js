@@ -91,3 +91,16 @@ test("cookie-import strict mode requires explicit acknowledgement flag", async (
   const allowed = await manager.exec("cookie-import", [filePath, "--allow-plaintext-cookies"]);
   assert.match(allowed, /OK: loaded 1 cookies/);
 });
+
+test("cookie-import-browser rejects unknown flags", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    context() {
+      return {
+        async addCookies() {},
+      };
+    },
+  };
+
+  await assert.rejects(manager.exec("cookie-import-browser", ["--unknown-flag"]), /Unknown flag/);
+});

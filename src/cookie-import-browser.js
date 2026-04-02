@@ -403,6 +403,20 @@ async function getWindowsMasterKey(match) {
     throw new CookieImportError(`Invalid Local State JSON: ${localStatePath}`, "bad_state");
   }
 
+  const hasAppBoundKey =
+    typeof localState?.os_crypt?.app_bound_encrypted_key === "string" &&
+    localState.os_crypt.app_bound_encrypted_key.length > 0;
+  const hasAppBoundFixedData = Object.keys(localState?.os_crypt || {}).some((key) =>
+    key.startsWith("app_bound_fixed_data"),
+  );
+  if (hasAppBoundKey || hasAppBoundFixedData) {
+    throw new CookieImportError(
+      `${match.browser.name} uses App-Bound Encryption on this profile. Direct decrypt is not supported here; use cookie-import-browser ${match.browser.aliases?.[0] || match.browser.name.toLowerCase()} (picker mode).`,
+      "abe_unsupported",
+      "open_picker",
+    );
+  }
+
   const encryptedKeyB64 = localState?.os_crypt?.encrypted_key;
   if (!encryptedKeyB64 || typeof encryptedKeyB64 !== "string") {
     throw new CookieImportError("Missing os_crypt.encrypted_key in Local State", "key_missing");
@@ -485,9 +499,28 @@ async function decryptCookieValue(row, keys) {
       const encrypted = ev.slice(15);
       const ciphertext = encrypted.slice(0, -16);
       const authTag = encrypted.slice(-16);
-      const decipher = crypto.createDecipheriv("aes-256-gcm", winMaster, nonce);
-      decipher.setAuthTag(authTag);
-      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+      let plaintext;
+      try {
+        const decipher = crypto.createDecipheriv("aes-256-gcm", winMaster, nonce);
+        decipher.setAuthTag(authTag);
+        plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      } catch {
+        throw new CookieImportError("Could not decrypt cookie value (GCM auth failed)", "decrypt_failed");
+      }
+
+      const decoded = plaintext.toString("utf8");
+      const replacementCount = [...decoded].filter((ch) => ch === "\uFFFD").length;
+      const replacementRatio = decoded.length > 0 ? replacementCount / decoded.length : 0;
+      const nonPrintableCount = [...decoded].filter((ch) => {
+        const code = ch.charCodeAt(0);
+        return code < 0x20 && code !== 0x09;
+      }).length;
+      const nonPrintableRatio = decoded.length > 0 ? nonPrintableCount / decoded.length : 0;
+      if (replacementRatio > 0.02 || nonPrintableRatio > 0.02) {
+        throw new CookieImportError("Decrypted cookie value is invalid", "decrypt_failed");
+      }
+
+      return decoded;
     }
     const decryptedB64 = await dpapiUnprotectBase64(ev.toString("base64"));
     return Buffer.from(decryptedB64, "base64").toString("utf8");
@@ -630,19 +663,35 @@ export async function importCookies(browserName, domains, profile = "Default") {
   const keys = await getDerivedKeys(match);
   const handle = await openDb(match.dbPath, browser.name);
 
+  const requestedDomainSet = new Set(domains.map((domain) => normalizeDomainInput(domain)).filter(Boolean));
+
   try {
     const now = chromiumNow().toString();
-    const placeholders = domainCandidates.map(() => "?").join(",");
-    const rows = handle.db
-      .prepare(
-        `SELECT host_key, name, value, encrypted_value, path, expires_utc,
-                is_secure, is_httponly, has_expires, samesite
-         FROM cookies
-         WHERE host_key IN (${placeholders})
-           AND (has_expires = 0 OR expires_utc > ?)
-         ORDER BY host_key, name`,
-      )
-      .all(...domainCandidates, now);
+
+    function readRowsForCandidates(candidates) {
+      const placeholders = candidates.map(() => "?").join(",");
+      return handle.db
+        .prepare(
+          `SELECT host_key, name, value, encrypted_value, path, expires_utc,
+                  is_secure, is_httponly, has_expires, samesite
+           FROM cookies
+           WHERE host_key IN (${placeholders})
+             AND (has_expires = 0 OR expires_utc > ?)
+           ORDER BY host_key, name`,
+        )
+        .all(...candidates, now);
+    }
+
+    let rows = readRowsForCandidates(domainCandidates);
+    let aliasNote = null;
+    const requestedTwitter = requestedDomainSet.has("twitter.com") || requestedDomainSet.has(".twitter.com");
+    if (rows.length === 0 && requestedTwitter) {
+      const aliasCandidates = expandDomainCandidates(["x.com", ".x.com"]);
+      rows = readRowsForCandidates(aliasCandidates);
+      if (rows.length > 0) {
+        aliasNote = "twitter.com cookies not found; used x.com alias";
+      }
+    }
 
     const cookies = [];
     let failed = 0;
@@ -653,12 +702,15 @@ export async function importCookies(browserName, domains, profile = "Default") {
         const cookie = toPlaywrightCookie(row, value);
         cookies.push(cookie);
         domainCounts[row.host_key] = (domainCounts[row.host_key] || 0) + 1;
-      } catch {
+      } catch (err) {
+        if (err instanceof CookieImportError && err.code === "abe_unsupported") {
+          throw err;
+        }
         failed++;
       }
     }
 
-    return { cookies, count: cookies.length, failed, domainCounts };
+    return { cookies, count: cookies.length, failed, domainCounts, aliasNote };
   } finally {
     closeDb(handle);
   }

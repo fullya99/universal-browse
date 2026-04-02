@@ -32,6 +32,10 @@ npx unibrowse status
 - Windows DPAPI decryption fails:
   - ensure you run from the same Windows user account that owns the browser profile.
   - verify PowerShell is available (`powershell -Command "$PSVersionTable.PSVersion"` or `pwsh -Command "$PSVersionTable.PSVersion"`).
+- Windows App-Bound Encryption detected (`abe_unsupported`):
+  - Chromium profile uses `app_bound_encrypted_key`; DPAPI-only import is intentionally blocked.
+  - run interactive fallback: `npm run unibrowse -- cookie-import-browser chrome` (or brave/edge).
+  - for diagnostics, query `GET /cookie-picker/debug?browser=<name>&profile=<profile>`.
 - `db_locked`:
   - close the browser fully, then retry import.
 - Sensitive cookie JSON on disk:
@@ -40,6 +44,9 @@ npx unibrowse status
 - Plaintext cookie import policy:
   - default behavior allows plaintext JSON imports (operator responsibility).
   - to enforce acknowledgement in stricter environments, set `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1` and require `--allow-plaintext-cookies`.
+- Picker UI shows `Failed to fetch`:
+  - recent builds include HTTP status/body in UI error text.
+  - inspect daemon stderr for `[cookie-picker]` endpoint error logs.
 
 ## Claude Code native install issues
 
