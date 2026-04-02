@@ -55,6 +55,42 @@ test("cookie-import warns on plaintext cookie files", async (t) => {
   assert.match(output, /WARNING: cookie files may contain live session secrets/);
 });
 
+test("cookie-import normalizes Cookie-Editor sameSite values", async (t) => {
+  const filePath = path.join(os.tmpdir(), `universal-browse-cookie-import-${Date.now()}.json`);
+  fs.writeFileSync(
+    filePath,
+    JSON.stringify([
+      { name: "a", value: "1", domain: ".example.com", path: "/", sameSite: "no_restriction" },
+      { name: "b", value: "2", domain: ".example.com", path: "/", sameSite: "strict" },
+      { name: "c", value: "3", domain: ".example.com", path: "/", sameSite: "weird" },
+      { name: "d", value: "4", domain: ".example.com", path: "/", sameSite: null },
+    ]),
+  );
+  t.after(() => {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {}
+  });
+
+  let imported = [];
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+  manager.page = {
+    url() {
+      return "https://example.com";
+    },
+    context() {
+      return {
+        async addCookies(cookies) {
+          imported = cookies;
+        },
+      };
+    },
+  };
+
+  await manager.exec("cookie-import", [filePath]);
+  assert.deepEqual(imported.map((c) => c.sameSite), ["None", "Strict", "Lax", "Lax"]);
+});
+
 test("cookie-import strict mode requires explicit acknowledgement flag", async (t) => {
   const previous = process.env.UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK;
   process.env.UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK = "1";
@@ -103,4 +139,45 @@ test("cookie-import-browser rejects unknown flags", async () => {
   };
 
   await assert.rejects(manager.exec("cookie-import-browser", ["--unknown-flag"]), /Unknown flag/);
+});
+
+test("snapshot retries once by recreating page when closed", async () => {
+  const manager = new BrowserManager({ mode: "headless", useHeadless: true, noSandbox: false });
+
+  const recoveredPage = {
+    _closed: false,
+    isClosed() {
+      return this._closed;
+    },
+    url() {
+      return "https://example.com";
+    },
+    locator() {
+      return {
+        ariaSnapshot() {
+          return "[document]";
+        },
+      };
+    },
+    on() {},
+    async goto() {},
+  };
+
+  manager.page = {
+    isClosed() {
+      return true;
+    },
+  };
+  manager.context = {
+    isClosed() {
+      return false;
+    },
+    async newPage() {
+      return recoveredPage;
+    },
+  };
+  manager.lastKnownUrl = "https://example.com";
+
+  const snap = await manager.exec("snapshot", []);
+  assert.match(snap, /\[document\]/);
 });

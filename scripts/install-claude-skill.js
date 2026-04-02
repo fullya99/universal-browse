@@ -76,6 +76,7 @@ async function main() {
 
     console.log(`[universal-browse] Installed Claude skill to: ${targetPath}`);
     console.log(`[universal-browse] Scope: ${scope}`);
+    console.log("[universal-browse] Run `npm run preflight` to verify runtime readiness.");
   } catch (error) {
     console.error(`[universal-browse] Claude skill install failed: ${error.message}`);
     console.error(USAGE);

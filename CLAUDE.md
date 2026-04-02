@@ -93,14 +93,21 @@ Flux supportes:
   - `npm run unibrowse -- cookie-import /tmp/cookies.json`
 - Import direct depuis navigateur:
   - `npm run unibrowse -- cookie-import-browser chrome --domain .github.com --profile Default`
+- Listing domaines disponibles (mode CLI, sans picker):
+  - `npm run unibrowse -- cookie-import-browser chrome --profile Default --list-domains`
 - Picker interactif:
   - `npm run unibrowse -- cookie-import-browser chrome`
+- Debug picker (API):
+  - `GET /cookie-picker/debug?browser=chrome&profile=Default`
 
 Notes:
 
 - macOS: depend de `security` (Keychain)
 - Linux v11: depend de `secret-tool`
 - DB lockee: fallback sur copie temporaire SQLite
+- Windows Chrome/Brave recents (ABE): detection explicite `abe_unsupported` + fallback JSON
+- `cookie-import-browser` est strict sur les flags inconnus (erreur immediate)
+- les requetes `twitter.com` peuvent etre retentees automatiquement sur alias `x.com`
 
 ## Modifier le skill proprement
 
@@ -168,6 +175,11 @@ git push
   - installer `xvfb`
 - Echec decrypt cookies:
   - verifier Keychain (macOS) ou `secret-tool` (Linux)
+- Erreur `abe_unsupported` (Windows):
+  - utiliser temporairement `cookie-import <json-file>`
+  - verifier si le navigateur source est en chiffrement App-Bound
+- Erreur picker "Failed to fetch":
+  - consulter `/cookie-picker/debug` et les logs stderr `[cookie-picker]`
 
 ## Definition of done pour changements runtime
 
@@ -203,19 +215,22 @@ Si echec persistant:
 
 Symptomes:
 
-- `keychain_denied`, `keychain_timeout`, `db_locked`
+- `keychain_denied`, `keychain_timeout`, `db_locked`, `decrypt_failed`, `abe_unsupported`
 
 Actions immediates:
 
 1. basculer temporairement sur `cookie-import <json-file>` pour continuer le service
 2. fermer completement le navigateur source (Chrome/Brave/etc.)
 3. relancer import direct avec `--domain` et `--profile` explicites
+4. lister domaines en texte via `--list-domains` pour valider le profil
+5. utiliser `/cookie-picker/debug` si le picker UI remonte un echec reseau
 
 Actions correctives:
 
 - macOS: valider la popup Keychain pour le service "Safe Storage"
 - Linux: installer/verifier `secret-tool`, session keyring deverrouillee
 - surveiller WAL/SHM lock et relancer import
+- Windows ABE: documenter la limitation, conserver fallback JSON pour continuite
 
 ### Incident P2 - mode headed VPS ne demarre pas
 

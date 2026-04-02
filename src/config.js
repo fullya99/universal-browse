@@ -18,7 +18,15 @@ export function resolveConfig(env = process.env) {
   const projectDir = env.UNIVERSAL_BROWSE_PROJECT_DIR || gitRoot() || process.cwd();
   const stateDir = path.join(projectDir, ".universal-browse");
   const stateFile = path.join(stateDir, "state.json");
-  const mode = env.UNIVERSAL_BROWSE_MODE === "headed" ? "headed" : "headless";
+  let mode = "headless";
+  if (env.UNIVERSAL_BROWSE_MODE === "headed") {
+    mode = "headed";
+  } else {
+    try {
+      const persisted = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+      if (persisted?.mode === "headed") mode = "headed";
+    } catch {}
+  }
   return {
     projectDir,
     stateDir,

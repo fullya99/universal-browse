@@ -248,3 +248,4 @@ npm run install:claude:personal
 - Linux headed without display: install Xvfb or use headless mode.
 - macOS cookie decrypt blocked: keychain approval required.
 - Windows cookie decrypt blocked: run under the same user profile and ensure PowerShell is available.
+- Google login blocked in automation browser: if Google shows "This browser or app may not be secure", use cookie handoff (`cookie-import`) from a trusted regular browser session instead of in-automation sign-in.

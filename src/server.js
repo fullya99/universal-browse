@@ -62,13 +62,18 @@ async function start() {
     }
 
     if (url.pathname === "/health" && req.method === "GET") {
+      const status = manager.getStatus();
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
           status: "healthy",
           mode: config.mode,
           strategy: strategy.mode,
-          currentUrl: manager.getStatus().url,
+          currentUrl: status.url,
+          pageAvailable: status.pageAvailable,
+          pageClosed: status.pageClosed,
+          contextClosed: status.contextClosed,
+          browserConnected: status.browserConnected,
         }),
       );
       return;

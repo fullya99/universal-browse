@@ -61,6 +61,48 @@ function formatA11y(node, depth = 0, lines = []) {
   return lines;
 }
 
+function normalizeSameSite(raw) {
+  if (raw === undefined || raw === null) return "Lax";
+  const value = String(raw).trim().toLowerCase();
+  if (value === "no_restriction" || value === "none") return "None";
+  if (value === "lax") return "Lax";
+  if (value === "strict") return "Strict";
+  return "Lax";
+}
+
+function normalizeImportedCookie(cookie, pageUrl) {
+  const next = { ...cookie };
+  if (!next.domain) next.domain = pageUrl.hostname;
+  if (!next.path) next.path = "/";
+  next.sameSite = normalizeSameSite(next.sameSite);
+  return next;
+}
+
+function isPageClosed(page) {
+  if (!page) return true;
+  if (typeof page.isClosed !== "function") return false;
+  return page.isClosed();
+}
+
+function isContextClosed(context) {
+  if (!context) return true;
+  if (typeof context.isClosed !== "function") return false;
+  return context.isClosed();
+}
+
+function safePageUrl(page) {
+  if (!page || isPageClosed(page) || typeof page.url !== "function") return "";
+  try {
+    return page.url() || "";
+  } catch {
+    return "";
+  }
+}
+
+function isRecoverableSnapshotError(message) {
+  return /(page is not available|target page, context or browser has been closed|has been closed)/i.test(message);
+}
+
 function parseCookieImportBrowserArgs(args) {
   const parsed = {
     browser: "chrome",
@@ -137,6 +179,7 @@ export class BrowserManager {
     this.networkLog = [];
     this.maxLogEntries = 2000;
     this.serverPort = null;
+    this.lastKnownUrl = "about:blank";
   }
 
   setServerPort(port) {
@@ -157,6 +200,7 @@ export class BrowserManager {
     this.context = await this.browser.newContext({ viewport: { width: 1280, height: 720 } });
     this.page = await this.context.newPage();
     this.wireEvents(this.page);
+    this.lastKnownUrl = safePageUrl(this.page) || "about:blank";
   }
 
   wireEvents(page) {
@@ -191,10 +235,43 @@ export class BrowserManager {
   }
 
   getStatus() {
+    const pageClosed = isPageClosed(this.page);
+    const contextClosed = isContextClosed(this.context);
+    const browserConnected = Boolean(this.browser && typeof this.browser.isConnected === "function" && this.browser.isConnected());
+    const liveUrl = safePageUrl(this.page);
+    if (liveUrl) this.lastKnownUrl = liveUrl;
     return {
       strategy: this.strategy.mode,
-      url: this.page ? this.page.url() : "about:blank",
+      url: liveUrl || this.lastKnownUrl || "about:blank",
+      pageAvailable: Boolean(this.page) && !pageClosed && !contextClosed,
+      pageClosed,
+      contextClosed,
+      browserConnected,
     };
+  }
+
+  async recoverPageForSnapshot() {
+    if (!this.context || isContextClosed(this.context)) {
+      throw new Error("Page is not available");
+    }
+
+    const liveUrl = safePageUrl(this.page);
+    if (liveUrl && liveUrl !== "about:blank") this.lastKnownUrl = liveUrl;
+
+    if (!this.page || isPageClosed(this.page)) {
+      this.page = await this.context.newPage();
+      this.wireEvents(this.page);
+    }
+
+    const targetUrl = this.lastKnownUrl;
+    if (targetUrl && targetUrl !== "about:blank") {
+      try {
+        await this.page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
+      } catch {}
+    }
+
+    const refreshed = safePageUrl(this.page);
+    if (refreshed) this.lastKnownUrl = refreshed;
   }
 
   async exec(command, args) {
@@ -206,6 +283,7 @@ export class BrowserManager {
         const url = args[0];
         if (!url) throw new Error("Usage: goto <url>");
         await this.page.goto(url, { waitUntil: "domcontentloaded" });
+        this.lastKnownUrl = safePageUrl(this.page) || this.lastKnownUrl;
         return `OK: navigated to ${this.page.url()}`;
       }
       case "text": {
@@ -217,7 +295,16 @@ export class BrowserManager {
           return await renderSnapshot(this.page);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(`Snapshot failed: ${msg}`);
+          if (!isRecoverableSnapshotError(msg)) {
+            throw new Error(`Snapshot failed: ${msg}`);
+          }
+          try {
+            await this.recoverPageForSnapshot();
+            return await renderSnapshot(this.page);
+          } catch (retryErr) {
+            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            throw new Error(`Snapshot failed after recovery: ${retryMsg}`);
+          }
         }
       }
       case "click": {
@@ -284,10 +371,9 @@ export class BrowserManager {
           if (!cookie?.name || cookie?.value === undefined) {
             throw new Error("Each cookie must include name and value");
           }
-          if (!cookie.domain) cookie.domain = pageUrl.hostname;
-          if (!cookie.path) cookie.path = "/";
         }
-        await this.page.context().addCookies(cookies);
+        const normalizedCookies = cookies.map((cookie) => normalizeImportedCookie(cookie, pageUrl));
+        await this.page.context().addCookies(normalizedCookies);
         return `OK: loaded ${cookies.length} cookies from ${resolved}\nWARNING: cookie files may contain live session secrets; delete file after import.`;
       }
       case "cookie-import-browser": {
@@ -309,6 +395,13 @@ export class BrowserManager {
           const result = await importCookies(browserArg, [domain], profile);
           if (result.cookies.length > 0) await this.page.context().addCookies(result.cookies);
           const alias = result.aliasNote ? ` (${result.aliasNote})` : "";
+          if (result.count === 0 && result.failed > 0) {
+            throw new Error(
+              `ERROR: found ${result.failed} cookies for ${domain} from ${browserArg}, but none could be decrypted/imported. ` +
+                "Likely cause on Windows Chromium browsers: App-Bound Encryption (ABE). " +
+                "Workaround: export cookies via Cookie-Editor and import with `cookie-import <file.json>`.",
+            );
+          }
           return `OK: imported ${result.count} cookies for ${domain} from ${browserArg}${result.failed ? ` (${result.failed} failed)` : ""}${alias}`;
         }
 

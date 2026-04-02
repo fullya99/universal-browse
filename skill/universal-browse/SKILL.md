@@ -85,3 +85,9 @@ UNIVERSAL_BROWSE_MODE=headed npx unibrowse status
 
 2. Ask the user to complete the manual step.
 3. Continue with snapshot + assertions.
+
+## Known limitations
+
+- Google account login (Gmail/Drive/GAIA) may block Playwright-driven browsers with "This browser or app may not be secure", even in headed mode.
+- Preferred workaround: export cookies from a trusted logged-in browser (for example with Cookie-Editor), then run `npm run unibrowse -- cookie-import <file.json>`.
+- In strict environments with `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1`, add `--allow-plaintext-cookies` to acknowledge handling of sensitive cookie JSON.

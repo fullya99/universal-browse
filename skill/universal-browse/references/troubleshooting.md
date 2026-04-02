@@ -48,6 +48,16 @@ npx unibrowse status
   - recent builds include HTTP status/body in UI error text.
   - inspect daemon stderr for `[cookie-picker]` endpoint error logs.
 
+## Google account login blocked in automation browser
+
+- Symptom: Google sign-in shows "This browser or app may not be secure".
+- Cause: Google may block sign-ins from browsers controlled by software automation.
+- Workaround:
+  - complete sign-in in a regular browser profile,
+  - export cookies,
+  - import with `npm run unibrowse -- cookie-import <file.json>`.
+- If strict acknowledgement is enabled, use `npm run unibrowse -- cookie-import <file.json> --allow-plaintext-cookies`.
+
 ## Claude Code native install issues
 
 - Skill not found after install:
