@@ -45,9 +45,17 @@ npm ci && npx playwright install --with-deps chromium && npm run preflight
 # Runtime
 npm run unibrowse -- status
 npm run unibrowse -- goto https://example.com
+npm run unibrowse -- goto https://internal.example.com --no-challenge   # skip challenge detection
 npm run unibrowse -- snapshot
 npm run unibrowse -- screenshot /tmp/proof.png
 npm run unibrowse -- stop
+
+# Speed: batch (N commands, 1 round-trip)
+npm run unibrowse -- batch 'fill #email user@test.com' 'fill #password pass' 'click #submit'
+npm run unibrowse -- batch --json '["fill #email user@test.com","click #submit"]'   # Windows PowerShell
+
+# Speed: execute (direct JS eval, fastest)
+npm run unibrowse -- execute "document.querySelector('#email').value='test@test.com'"
 
 # Cookies
 npm run unibrowse -- cookie-import /tmp/cookies.json
@@ -81,9 +89,10 @@ npm run test:coverage
 1. Le CLI lit `.universal-browse/state.json`
 2. Si daemon absent/stale → relance automatique
 3. Le mode (`headed`/`headless`) est persiste et reutilise
-4. Daemon lance Chromium via Playwright selon la strategie d'affichage
+4. Daemon lance Chromium via Playwright selon la strategie d'affichage (avec flags OS-specifiques: `--disable-gpu` Windows/Linux headless, `--no-first-run`, `--disable-extensions`, etc.)
 5. Commandes via `POST /command` avec bearer token
 6. `/health` remonte: `pageAvailable`, `pageClosed`, `contextClosed`, `browserConnected`
+7. Timeout par defaut: 10s (page), 5s (click/fill waitFor). Overridable via `--timeout <ms>`
 
 Variables d'environnement:
 
@@ -109,6 +118,7 @@ Definition of done:
 - `npm run preflight` ne casse pas
 - README + SKILL + troubleshooting alignes
 - Smoke flow `status → goto → snapshot → stop` fonctionne
+- Smoke flow `batch 'fill input test' 'click button'` fonctionne
 
 ## Distribution du skill
 
@@ -151,6 +161,7 @@ python3 ~/claude-ops/workflows/skill-creator/skill/scripts/validate_skill.py ski
 - Ne jamais logger tokens bruts
 - Ne jamais exposer messages d'erreur internes en HTTP 500 (retourner `"Command failed"`)
 - `goto` valide le protocole (http/https uniquement)
+- `execute` tourne dans le contexte page (pas Node) — meme frontiere de confiance que `eval`
 - `cookies` masque les valeurs par defaut
 - Handlers `uncaughtException`/`unhandledRejection` loggent avant shutdown
 
@@ -165,6 +176,9 @@ python3 ~/claude-ops/workflows/skill-creator/skill/scripts/validate_skill.py ski
 | Picker "Failed to fetch" | `/cookie-picker/debug` + logs stderr |
 | Snapshot instable headed | `stop` → `status` → `goto` → `snapshot` |
 | Google login bloque | Login navigateur standard → exporter cookies → `cookie-import` |
+| Formulaire lent (>30s) | Utiliser `batch` ou `execute` au lieu de commandes individuelles |
+| Navigation lente URL connue | Ajouter `--no-challenge` au `goto` |
+| Click/fill timeout trop long | Ajuster avec `--timeout <ms>` (defaut 5s) |
 
 ## Runbook incidents
 
@@ -243,5 +257,6 @@ npm run unibrowse -- status
 ## Backlog technique
 
 - Smoke e2e CI pour `/cookie-picker/imported`
+- Smoke e2e CI pour `batch` et `execute`
 - Changelog versionne (`CHANGELOG.md`)
-- Augmenter seuils coverage (actuellement 30% lines, 60% branches)
+- Augmenter seuils coverage (actuellement 30% lines, 60% branches — mesure reelle ~61%/62%)
