@@ -84,10 +84,13 @@ If user chooses runtime-only fallback, still run section 5 and report `READY-RUN
 
 Use the first exact match. Do not downgrade to generic files if a native location exists.
 
-- Claude Code
+- Claude Code (CLI / Desktop)
   - native skill location: `.claude/skills/universal-browse/SKILL.md` (project) or `~/.claude/skills/universal-browse/SKILL.md` (personal)
   - native standalone installer: `npm run install:claude:project` or `npm run install:claude:personal`
   - proof command: ask Claude for available skills and verify `/universal-browse` exists
+- Claude.ai (Web)
+  - install: `npm run install:claude:zip` then upload `universal-browse-skill.zip` via Settings > Capabilities > Skills
+  - proof command: ask Claude in the web UI to list available skills
 - Codex CLI
   - native instructions: `AGENTS.md` (or `AGENTS.override.md`) per Codex discovery
   - proof command: `codex --ask-for-approval never "Summarize active instruction files"`
@@ -208,7 +211,14 @@ npm run install:claude:personal
 This copies the full skill directory (SKILL.md + references/) to the target scope.
 Verify with: `ls ~/.claude/skills/universal-browse/references/`
 
-- Plugin workflow is not supported for installation in this repository. Use standalone native installers only.
+- For Claude.ai (Web), generate an uploadable zip instead:
+
+```bash
+npm run install:claude:zip
+# produces universal-browse-skill.zip — upload via Settings > Capabilities > Skills
+```
+
+- Plugin workflow is not supported for installation in this repository. Use standalone native installers or the zip upload.
 
 ### Codex CLI
 
