@@ -32,7 +32,7 @@ If native proof is missing, final status must be `READY-RUNTIME-ONLY` (not fully
 
 ## 3) Universal bootstrap prompt (for any AI CLI)
 
-Copy/paste this first prompt in the user's AI CLI. It asks the agent to detect the host tool and wire the right instruction file automatically.
+Copy/paste this first prompt in the user's AI CLI. It forces an interactive choice flow before any setup.
 
 ```text
 You are configuring universal-browse as a reusable skill/workflow for this project.
@@ -45,6 +45,12 @@ Objectives:
 2) detect this AI tool and install in the native skill/instruction location
 3) collect proof that native registration is active
 
+Before setup, ask the user these choices and wait for answers:
+1) Target tool: Claude Code / Codex CLI / OpenCode / Gemini CLI / Kimi Code CLI / other
+2) Install scope: project-native / personal-native / runtime-only fallback
+3) If Claude Code: plugin install (`claude plugin add ...`) or project skill file (`.claude/skills/universal-browse/SKILL.md`)
+4) If native registration fails: stop with NOT READY or continue as READY-RUNTIME-ONLY
+
 Rules:
 - no commit/push
 - no destructive git commands
@@ -52,14 +58,25 @@ Rules:
 - show each command before running it
 
 Execution plan:
-1) Detect host tool (Claude Code / Codex CLI / OpenCode / Gemini CLI / Kimi-based CLI / IDE agent).
-2) Follow section "3) Adapter matrix" in ai-cli-integration.md to pick instruction target files.
-3) Follow section "4) Native target matrix" and perform native registration for the detected tool.
-4) Run install + validation from section "5) Install and validate runtime".
-5) Write/update instruction content from section "6) Instruction block template".
-6) Run both checklists from sections "7" and "8".
-7) Print final report with READY-RUNTIME and READY-NATIVE-SKILL separately.
+1) Collect user choices above.
+2) Follow section "4) Native target matrix" and perform native registration for the selected tool/scope.
+3) Run install + validation from section "5) Install and validate runtime".
+4) Write/update instruction content from section "6) Instruction block template".
+5) Run both checklists from sections "7" and "8".
+6) Print final report with READY-RUNTIME and READY-NATIVE-SKILL separately.
 ```
+
+## 3.1) Interactive decision mapping
+
+Apply these defaults unless the user chooses otherwise:
+
+- Claude Code: prefer plugin install for shareable native skill distribution.
+- Codex CLI: prefer project `AGENTS.md`; use `~/.codex/AGENTS.md` only if user asks global scope.
+- OpenCode: prefer project `AGENTS.md` via `/init`.
+- Gemini CLI: prefer project `GEMINI.md`.
+- Kimi Code CLI: prefer project `AGENTS.md` via `/init`.
+
+If user chooses runtime-only fallback, still run section 5 and report `READY-RUNTIME-ONLY`.
 
 ## 4) Native target matrix
 

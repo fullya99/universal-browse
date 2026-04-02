@@ -101,7 +101,10 @@ You are in the root of the universal-browse repository.
 Use this helper as the source of truth:
 - skill/universal-browse/references/ai-cli-integration.md
 
-Execute section "3) Universal bootstrap prompt (for any AI CLI)" first, then run section "5) Install and validate runtime", and finish with sections "7" and "8".
+First, run section "3) Universal bootstrap prompt (for any AI CLI)".
+Important: make the process interactive by asking the user choices before setup (tool, scope, native install mode, fallback behavior) as defined in section "3".
+
+Then run section "5) Install and validate runtime", and finish with sections "7" and "8".
 
 Important:
 - Do not report full success unless both statuses pass:
@@ -120,6 +123,10 @@ Output format:
 - command-by-command status
 - exact failing output if any
 - next actions if failed
+- selected user choices (tool/scope/native mode)
+- final status split:
+  - READY-RUNTIME
+  - READY-NATIVE-SKILL (or READY-RUNTIME-ONLY)
 ```
 
 ### Tool-specific note
