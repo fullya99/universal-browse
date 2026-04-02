@@ -101,7 +101,12 @@ You are in the root of the universal-browse repository.
 Use this helper as the source of truth:
 - skill/universal-browse/references/ai-cli-integration.md
 
-Execute section "2) Universal bootstrap prompt (for any AI CLI)" first, then run section "4) Install and validate runtime", and finish with section "6) Acceptance checklist for plugged status".
+Execute section "3) Universal bootstrap prompt (for any AI CLI)" first, then run section "5) Install and validate runtime", and finish with sections "7" and "8".
+
+Important:
+- Do not report full success unless both statuses pass:
+  - `READY-RUNTIME`
+  - `READY-NATIVE-SKILL`
 
 Constraints:
 - do not commit or push
@@ -124,14 +129,15 @@ Output format:
 
 ### Where to plug instructions by tool
 
-- Claude Code: project `CLAUDE.md` (or session instructions if no project file)
-- Codex CLI: project `AGENTS.md` or local agent instruction file used by your Codex setup
-- OpenCode: project instruction file configured for the current workspace
+- Claude Code: native skill in `.claude/skills/universal-browse/SKILL.md` or plugin via `claude plugin add ...` (`CLAUDE.md` is supporting memory)
+- Codex CLI: `AGENTS.md` / `AGENTS.override.md` (native discovery)
+- OpenCode: `AGENTS.md` (native, via `/init`)
 - Cursor/Windsurf/other IDE agents: workspace rules/instructions file
-- Gemini CLI wrappers: project prompt/instruction file loaded at session start
-- Kimi-based CLIs: native project-memory file if available, otherwise `AI_INSTRUCTIONS.md`
+- Gemini CLI: `GEMINI.md` (native project context file)
+- Kimi Code CLI: `AGENTS.md` (native, generated via `/init`)
+- Gemini/Kimi wrappers without native convention: fallback `AI_INSTRUCTIONS.md` but classify as runtime-only until native proof exists
 
-If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md` and paste the integration prompt there.
+If your tool does not have a dedicated instruction file, keep a project-level `AI_INSTRUCTIONS.md`, but report status as `READY-RUNTIME-ONLY` until native registration is available.
 
 ### Claude Code plugin install (optional but recommended)
 

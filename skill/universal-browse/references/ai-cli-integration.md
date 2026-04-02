@@ -10,9 +10,9 @@ Integration strategy below is based on public docs/repositories:
 - Codex docs: explicit `AGENTS.md` guide in Codex docs.
 - OpenCode docs: `/init` creates `AGENTS.md` in project root.
 - Gemini CLI repo/docs: explicit project context file `GEMINI.md`.
-- Kimi ecosystem: model/platform docs are public, but no single official terminal-agent config standard was identified in the same way as `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`; use generic adapter flow for Kimi-based CLIs.
+- Kimi Code CLI docs: `/init` generates project `AGENTS.md` and is the native project instruction path.
 
-## 1) Integration contract
+## 1) Integration contract (native-first)
 
 Every tool-specific setup should enforce these rules:
 
@@ -21,8 +21,16 @@ Every tool-specific setup should enforce these rules:
 - Never print or store raw daemon bearer tokens.
 - Keep daemon local-only (`127.0.0.1`).
 - Do not commit/push automatically during setup.
+- Do not report success unless native registration/proof is complete for the host tool.
 
-## 2) Universal bootstrap prompt (for any AI CLI)
+## 2) Success criteria (must pass both)
+
+- `READY-RUNTIME`: install + tests + smoke commands pass.
+- `READY-NATIVE-SKILL`: tool-native registration/instruction discovery is proven with evidence commands.
+
+If native proof is missing, final status must be `READY-RUNTIME-ONLY` (not fully plugged).
+
+## 3) Universal bootstrap prompt (for any AI CLI)
 
 Copy/paste this first prompt in the user's AI CLI. It asks the agent to detect the host tool and wire the right instruction file automatically.
 
@@ -34,8 +42,8 @@ Source of truth: skill/universal-browse/references/ai-cli-integration.md
 
 Objectives:
 1) install + validate universal-browse
-2) detect this AI tool and write the right project instruction file
-3) register command conventions so future sessions can call unibrowse reliably
+2) detect this AI tool and install in the native skill/instruction location
+3) collect proof that native registration is active
 
 Rules:
 - no commit/push
@@ -46,33 +54,38 @@ Rules:
 Execution plan:
 1) Detect host tool (Claude Code / Codex CLI / OpenCode / Gemini CLI / Kimi-based CLI / IDE agent).
 2) Follow section "3) Adapter matrix" in ai-cli-integration.md to pick instruction target files.
-3) Run install + validation from section "4) Install and validate runtime".
-4) Write/update tool instruction file with section "5) Instruction block template".
-5) Run acceptance checklist from section "6) Acceptance checklist for plugged status".
-6) Print final report: PASS/FAIL, files written, command results, next actions.
+3) Follow section "4) Native target matrix" and perform native registration for the detected tool.
+4) Run install + validation from section "5) Install and validate runtime".
+5) Write/update instruction content from section "6) Instruction block template".
+6) Run both checklists from sections "7" and "8".
+7) Print final report with READY-RUNTIME and READY-NATIVE-SKILL separately.
 ```
 
-## 3) Adapter matrix (where instructions live)
+## 4) Native target matrix
 
-Write the instruction block in the first matching location.
+Use the first exact match. Do not downgrade to generic files if a native location exists.
 
 - Claude Code
-  - primary: `CLAUDE.md`
-  - optional plugin registration: `claude plugin add <repo-path-or-url>`
+  - native skill location: `.claude/skills/universal-browse/SKILL.md` (project) or `~/.claude/skills/universal-browse/SKILL.md` (personal)
+  - native plugin path (recommended for distribution): `claude plugin add <repo-path-or-url>`
+  - proof command: ask Claude for available skills and verify `/universal-browse` exists
 - Codex CLI
-  - primary: `AGENTS.md` (Codex supports this explicitly)
+  - native instructions: `AGENTS.md` (or `AGENTS.override.md`) per Codex discovery
+  - proof command: `codex --ask-for-approval never "Summarize active instruction files"`
 - OpenCode
-  - primary: `AGENTS.md` (OpenCode `/init` standard)
+  - native instructions: `AGENTS.md` (OpenCode `/init` standard)
+  - proof command: run `/init` (if needed), then ask OpenCode to report loaded project instructions
 - Gemini CLI
-  - primary: `GEMINI.md`
-- Kimi-based CLI (or unknown agent wrappers)
-  - primary fallback: `AI_INSTRUCTIONS.md`
-  - secondary fallback: `AGENTS.md`
+  - native instructions: `GEMINI.md`
+  - proof command: ask Gemini to summarize active project instructions and mention `GEMINI.md`
+- Kimi Code CLI
+  - native instructions: `AGENTS.md` generated/managed via `/init`
+  - proof command: run `/init` if file missing, then ask Kimi to summarize active project instructions
 - IDE agents (Cursor, Windsurf, JetBrains plugins, etc.)
   - use workspace instruction/rules file if available
-  - otherwise use `AI_INSTRUCTIONS.md`
+  - otherwise use `AGENTS.md` and mark status as runtime-only for that IDE until native proof exists
 
-## 4) Install and validate runtime
+## 5) Install and validate runtime
 
 Copy/paste this prompt into your AI CLI:
 
@@ -114,7 +127,7 @@ Run:
 9) Print final report with command-by-command status and exact failing output if any.
 ```
 
-## 5) Instruction block template
+## 6) Instruction block template
 
 Paste this block into the chosen instruction file:
 
@@ -135,29 +148,37 @@ Paste this block into the chosen instruction file:
 5. `npm run unibrowse -- stop`
 ```
 
-## 6) Acceptance checklist for plugged status
+## 7) Acceptance checklist (runtime)
 
-Mark integration complete only if all are true:
+Mark runtime ready only if all are true:
 
 - `npm run preflight` passes required checks.
 - `npm test` passes.
 - `npm run unibrowse -- status` auto-starts daemon.
 - `npm run unibrowse -- snapshot` returns non-empty output.
 - `npm run unibrowse -- stop` exits cleanly.
-- At least one instruction file is written/updated (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `AI_INSTRUCTIONS.md`).
 
-## 7) Tool adapters (notes)
+## 8) Acceptance checklist (native registration)
+
+Mark native-ready only if all are true:
+
+- Native target from section 4 is installed/configured (not fallback only).
+- Instruction/skill content from section 6 is present in native location.
+- Proof command output is captured and references the native location or active skill.
+- User can invoke native entrypoint:
+  - Claude: `/universal-browse`
+  - Codex/OpenCode/Kimi: active `AGENTS.md` behavior visible
+  - Gemini: active `GEMINI.md` behavior visible
+
+## 9) Tool adapters (notes)
 
 Use the same contract, then store it in the tool's project instruction channel.
 
 ### Claude Code
 
-- Preferred location: project `CLAUDE.md`
-- Add a short rule block:
-  - use `npm run unibrowse -- <command>` for browser automation
-  - run `npm run preflight` before triage
-  - keep token values out of logs
-- Optional plugin registration (recommended for turnkey skill discovery):
+- Prefer plugin or `.claude/skills/universal-browse/SKILL.md` for true native skill behavior.
+- `CLAUDE.md` is supporting memory, not a native skill install by itself.
+- Plugin registration (recommended):
 
 ```bash
 claude plugin add /path/to/universal-browse
@@ -167,12 +188,12 @@ claude plugin add https://github.com/fullya99/universal-browse
 
 ### Codex CLI
 
-- Store in your project instruction file (commonly `AGENTS.md` or equivalent local config used by your Codex workflow).
+- Store in `AGENTS.md` / `AGENTS.override.md` and verify discovery via Codex command output.
 - Include the smoke command sequence and no-commit guardrails.
 
 ### OpenCode
 
-- Add the same rule block in the workspace instruction file used by OpenCode.
+- Use `AGENTS.md` as the primary project instruction file.
 - Ensure shell examples are copied with OS-appropriate syntax.
 
 ### IDE agents (Cursor, Windsurf, etc.)
@@ -183,19 +204,25 @@ claude plugin add https://github.com/fullya99/universal-browse
   - `npm run unibrowse -- goto <url>`
   - `npm run unibrowse -- snapshot`
 
-### Gemini CLI and Gemini-based wrappers
+### Gemini CLI
+
+- Use `GEMINI.md` as native project instructions file.
+- Keep invocation explicit (`npm run unibrowse -- ...`) to avoid bin resolution variance.
+
+### Gemini-based wrappers
 
 - Add the contract to startup prompt/project memory file.
 - Keep invocation explicit (`npm run unibrowse -- ...`) to avoid bin resolution variance.
 
-### Kimi-based CLIs
+### Kimi Code CLI
 
-- If your Kimi CLI exposes a native project-memory file, use it.
-- Otherwise default to `AI_INSTRUCTIONS.md` (or `AGENTS.md`) with the instruction template from section 5.
+- Use `/init` to generate project `AGENTS.md` if missing, then append the instruction block.
+- Do not mark native-ready until Kimi confirms active project instructions.
 
-## 8) Common integration failures
+## 10) Common integration failures
 
 - `npx unibrowse` not found: use `npm run unibrowse -- <command>`.
+- runtime PASS but native not installed: mark `READY-RUNTIME-ONLY`, not full success.
 - Linux headed without display: install Xvfb or use headless mode.
 - macOS cookie decrypt blocked: keychain approval required.
 - Windows cookie decrypt blocked: run under the same user profile and ensure PowerShell is available.
