@@ -14,6 +14,8 @@ Use this skill to validate web behavior quickly and repeatedly in a persistent b
 
 ## Setup
 
+Preflight validates that Node, npm, and Playwright dependencies are present — run it first to catch missing system prerequisites before they surface as cryptic runtime errors.
+
 1. Run preflight once:
 
 ```bash
@@ -51,6 +53,8 @@ npm run unibrowse -- launch-with-profile brave --profile Default
 
 ## Cookie importer (full suite)
 
+Cookie import enables authenticated testing without manual login — essential for QA on protected pages. Values are masked by default because exported cookies contain live session tokens that could compromise accounts if leaked.
+
 - `cookie-import <json-file>` imports Playwright-style cookies from local JSON.
 - `cookie-import <json-file> --allow-plaintext-cookies` is accepted and can be required when `UNIVERSAL_BROWSE_REQUIRE_COOKIE_IMPORT_ACK=1`.
 - `launch-with-profile <chrome|brave|edge> [--profile <name>]` relaunches runtime with a native browser profile (`User Data`) for sites that reject cookie replay in fresh contexts.
@@ -65,18 +69,21 @@ npm run unibrowse -- launch-with-profile brave --profile Default
 
 ## Linux VPS strategy
 
+Headless is the default because most VPS environments lack a display server — headed mode would crash without Xvfb.
+
 - Default mode is headless for best compatibility.
 - For headed mode on servers, set `UNIVERSAL_BROWSE_MODE=headed`.
 - If no display exists, the CLI auto-uses `xvfb-run` when installed.
 
-See details:
-- `references/linux-vps.md`
-- `references/macos.md`
-- `references/windows.md`
-- `references/ai-cli-integration.md`
-- `references/troubleshooting.md`
+Read `references/linux-vps.md` now for VPS-specific headed mode and security setup.
+Read `references/macos.md` now for macOS-specific setup and workflow.
+Read `references/windows.md` now for Windows-specific setup, cookie decryption, and native profile mode.
+Read `references/ai-cli-integration.md` now for the cross-CLI integration contract and native skill installation.
+Read `references/troubleshooting.md` now when encountering runtime errors, auth failures, or cookie import issues.
 
 ## Handoff protocol
+
+Some sites require human interaction (CAPTCHA, MFA) that automation cannot solve. The handoff protocol avoids blocking the entire QA session by switching to headed mode for the manual step, then resuming automation.
 
 If CAPTCHA/MFA blocks automation:
 

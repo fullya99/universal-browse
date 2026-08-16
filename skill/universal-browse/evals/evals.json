@@ -1,0 +1,310 @@
+{
+  "skill_name": "universal-browse",
+  "baseline": {
+    "description": "Without the skill, browser QA requires the user to manually chain Playwright commands, handle daemon lifecycle, debug cookie import, and remember platform-specific flags.",
+    "without_skill": {
+      "messages": 12,
+      "failed_attempts": 3,
+      "tokens": 9500,
+      "notes": "User must know Playwright API, daemon start/stop, cookie format, and OS-specific headed mode flags"
+    },
+    "with_skill": {
+      "messages": 3,
+      "failed_attempts": 0,
+      "tokens": 4200,
+      "notes": "Skill provides command patterns, cookie workflow, challenge protocol, and handoff — single-pass execution"
+    }
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "trigger-open-url",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "Open https://staging.myapp.io and take a screenshot to verify the deploy looks right",
+      "expected_output": "Skill triggers, runs goto + screenshot sequence",
+      "assertions": [
+        "Skill is loaded and referenced in response",
+        "Uses npm run unibrowse -- goto",
+        "Uses npm run unibrowse -- screenshot"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "trigger-test-user-flow",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "Test the signup flow on our app — fill in the email field, click submit, and check what happens",
+      "expected_output": "Skill triggers, uses fill + click + snapshot",
+      "assertions": [
+        "Skill is loaded",
+        "Uses fill command for email input",
+        "Uses click command for submit",
+        "Uses snapshot or text to verify result"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "trigger-verify-ui",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "Can you verify that the login page renders correctly and there are no console errors?",
+      "expected_output": "Skill triggers, uses goto + snapshot + console",
+      "assertions": [
+        "Skill is loaded",
+        "Uses console command to check for errors"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "trigger-debug-network",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "I'm seeing slow load times on the dashboard — can you check the network requests and see what's taking so long?",
+      "expected_output": "Skill triggers, uses goto + network",
+      "assertions": [
+        "Skill is loaded",
+        "Uses network command to inspect requests"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "trigger-screenshot-proof",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "Take a screenshot of https://example.com/pricing as proof for the client",
+      "expected_output": "Skill triggers, runs goto + screenshot",
+      "assertions": [
+        "Skill is loaded",
+        "Screenshot is saved to a file path"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "trigger-cookie-auth-test",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "I need to test an authenticated page — import my cookies and browse to the admin panel",
+      "expected_output": "Skill triggers, uses cookie-import + goto",
+      "assertions": [
+        "Skill is loaded",
+        "Cookie import workflow is followed",
+        "Security warnings about cookie handling are mentioned"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "trigger-indirect-qa",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "I just deployed to staging, can you do a quick sanity check on the homepage?",
+      "expected_output": "Skill triggers for QA verification",
+      "assertions": [
+        "Skill is loaded",
+        "Uses goto + snapshot or screenshot"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "trigger-cloudflare-challenge",
+      "type": "triggering",
+      "should_trigger": true,
+      "prompt": "This site has Cloudflare protection, can you try to get past the challenge page and grab the content?",
+      "expected_output": "Skill triggers, references challenge protocol",
+      "assertions": [
+        "Skill is loaded",
+        "Challenge protocol is referenced or followed"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "no-trigger-write-playwright-test",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "Write a Playwright end-to-end test file for the checkout flow with assertions",
+      "expected_output": "Should NOT trigger — user wants to write Playwright test code, not use the browse daemon",
+      "assertions": [
+        "Skill is NOT loaded",
+        "Response helps write Playwright test code directly"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "no-trigger-install-playwright",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "How do I install Playwright in my project and configure it for CI?",
+      "expected_output": "Should NOT trigger — general Playwright setup question, not a browse/QA task",
+      "assertions": [
+        "Skill is NOT loaded",
+        "Response covers Playwright installation docs"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "no-trigger-web-scraping-code",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "Write me a Python web scraper using BeautifulSoup to extract product prices from this site",
+      "expected_output": "Should NOT trigger — web scraping code request, not browser QA",
+      "assertions": [
+        "Skill is NOT loaded"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "no-trigger-css-debug",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "The button CSS is wrong, the padding is off — can you fix the stylesheet?",
+      "expected_output": "Should NOT trigger — CSS code fix, not browser verification",
+      "assertions": [
+        "Skill is NOT loaded",
+        "Response edits CSS code directly"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "no-trigger-api-testing",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "Test the /api/users endpoint with curl and check the JSON response",
+      "expected_output": "Should NOT trigger — API testing via curl, not browser-based",
+      "assertions": [
+        "Skill is NOT loaded",
+        "Response uses curl or similar HTTP tool"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "no-trigger-browser-extension",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "Help me build a Chrome extension that modifies the DOM on page load",
+      "expected_output": "Should NOT trigger — building a browser extension, not QA browsing",
+      "assertions": [
+        "Skill is NOT loaded"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "no-trigger-fetch-url-content",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "Fetch the content of this documentation page and summarize it for me",
+      "expected_output": "Should NOT trigger — content fetching/summarization, not interactive browser QA",
+      "assertions": [
+        "Skill is NOT loaded",
+        "Uses WebFetch or similar read-only tool"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "no-trigger-puppeteer-migration",
+      "type": "triggering",
+      "should_trigger": false,
+      "prompt": "I need to migrate my Puppeteer tests to Playwright — what are the API differences?",
+      "expected_output": "Should NOT trigger — migration guidance, not a browse/QA task",
+      "assertions": [
+        "Skill is NOT loaded"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "functional-full-qa-flow",
+      "type": "functional",
+      "prompt": "Navigate to https://example.com, take a snapshot of the page content, check for console errors, and screenshot the result",
+      "expected_output": "Complete QA flow executed in sequence",
+      "assertions": [
+        "goto command navigates to URL",
+        "snapshot returns page content",
+        "console command checks for errors",
+        "screenshot saves to a file",
+        "Commands run in correct order"
+      ],
+      "files": []
+    },
+    {
+      "id": 18,
+      "name": "functional-form-interaction",
+      "type": "functional",
+      "prompt": "Go to https://example.com/contact, fill in the name field with 'Test User', fill email with 'test@example.com', and click the submit button",
+      "expected_output": "Form interaction completed with fill + click",
+      "assertions": [
+        "goto navigates to the form page",
+        "fill is used for name and email fields with correct selectors",
+        "click targets the submit button",
+        "snapshot or text verifies the result after submission"
+      ],
+      "files": []
+    },
+    {
+      "id": 19,
+      "name": "functional-cookie-import-auth",
+      "type": "functional",
+      "prompt": "Import cookies from /tmp/cookies.json and then browse to the authenticated dashboard at https://app.example.com/dashboard",
+      "expected_output": "Cookie import followed by authenticated navigation",
+      "assertions": [
+        "cookie-import command is used with correct file path",
+        "Security note about cookie handling is mentioned",
+        "goto navigates to dashboard after import",
+        "snapshot or screenshot verifies authenticated state"
+      ],
+      "files": ["/tmp/cookies.json"]
+    },
+    {
+      "id": 20,
+      "name": "functional-headed-handoff",
+      "type": "functional",
+      "prompt": "I need to test a page behind MFA — start headed mode so I can complete the login manually, then continue with automation",
+      "expected_output": "Handoff protocol is followed",
+      "assertions": [
+        "UNIVERSAL_BROWSE_MODE=headed is set",
+        "User is asked to complete manual step",
+        "Automation resumes after manual step with snapshot/assertions"
+      ],
+      "files": []
+    },
+    {
+      "id": 21,
+      "name": "functional-network-debug",
+      "type": "functional",
+      "prompt": "Go to https://app.example.com/dashboard and check if there are any failed network requests or slow API calls",
+      "expected_output": "Network inspection with analysis",
+      "assertions": [
+        "goto navigates to the page",
+        "network command captures requests",
+        "Failed requests (4xx/5xx) are identified if present",
+        "Slow requests are flagged if present"
+      ],
+      "files": []
+    },
+    {
+      "id": 22,
+      "name": "edge-case-empty-page",
+      "type": "functional",
+      "prompt": "Navigate to https://example.com/404 and tell me what the page shows",
+      "expected_output": "Handles non-existent page gracefully",
+      "assertions": [
+        "goto does not crash on 404",
+        "snapshot or text returns whatever content exists",
+        "Error page content is reported to user"
+      ],
+      "files": []
+    },
+    {
+      "id": 23,
+      "name": "edge-case-challenge-page",
+      "type": "functional",
+      "prompt": "Try to access https://protected-site.example.com which has Cloudflare protection",
+      "expected_output": "Challenge protocol is activated",
+      "assertions": [
+        "Challenge is detected",
+        "Headed mode switch is attempted if in headless",
+        "Screenshot of challenge state is captured",
+        "Status of challenge resolution is reported"
+      ],
+      "files": []
+    }
+  ]
+}

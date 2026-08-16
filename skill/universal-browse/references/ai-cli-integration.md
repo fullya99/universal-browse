@@ -2,6 +2,21 @@
 
 This document gives a single integration contract so `universal-browse` can be plugged into most AI terminal tools and IDE agents with minimal manual work.
 
+## Table of Contents
+
+- [0) Research-backed assumptions](#0-research-backed-assumptions-web-scan)
+- [1) Integration contract (native-first)](#1-integration-contract-native-first)
+- [2) Success criteria](#2-success-criteria-must-pass-both)
+- [3) Universal bootstrap prompt](#3-universal-bootstrap-prompt-for-any-ai-cli)
+- [3.1) Interactive decision mapping](#31-interactive-decision-mapping)
+- [4) Native target matrix](#4-native-target-matrix)
+- [5) Install and validate runtime](#5-install-and-validate-runtime)
+- [6) Instruction block template](#6-instruction-block-template)
+- [7) Acceptance checklist (runtime)](#7-acceptance-checklist-runtime)
+- [8) Acceptance checklist (native registration)](#8-acceptance-checklist-native-registration)
+- [9) Tool adapters (notes)](#9-tool-adapters-notes)
+- [10) Common integration failures](#10-common-integration-failures)
+
 ## 0) Research-backed assumptions (web scan)
 
 Integration strategy below is based on public docs/repositories:
